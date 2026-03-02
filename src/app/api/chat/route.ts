@@ -100,7 +100,10 @@ export async function POST(req: NextRequest) {
 
     let systemPrompt: string;
 
-    if (lessonType === "structured_unit" && body.scenarioTitle) {
+    if (body.systemPrompt) {
+      // Custom system prompt (from adaptive exercise engine)
+      systemPrompt = body.systemPrompt;
+    } else if (lessonType === "structured_unit" && body.scenarioTitle) {
       systemPrompt = buildScenarioPrompt({
         scenarioTitle: body.scenarioTitle,
         scenarioSetup: body.scenarioSetup || "",

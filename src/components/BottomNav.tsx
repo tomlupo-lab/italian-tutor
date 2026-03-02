@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, CalendarDays, Zap, BarChart3 } from "lucide-react";
+import { Home, Zap, BarChart3, Settings } from "lucide-react";
 import { cn } from "../lib/cn";
 
 const items = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/practice", label: "Practice", icon: Zap },
-  { href: "/stats", label: "Stats", icon: BarChart3 },
+  { href: "/progress", label: "Progress", icon: BarChart3 },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export default function BottomNav() {

@@ -1,44 +1,109 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import Link from "next/link";
-import { BookOpen, Zap, Flame, Trophy, AlertTriangle, CalendarDays } from "lucide-react";
-import { useMemo } from "react";
-import { getNowWarsaw } from "../lib/date";
-import units from "../../curriculum/units.json";
+import { Flame, Trophy, Zap, BarChart3, Loader2 } from "lucide-react";
+import { getTodayWarsaw } from "../lib/date";
+import ModeSelector from "../components/ModeSelector";
+import { useRouter } from "next/navigation";
+import type { ExerciseMode } from "@/lib/exerciseTypes";
 
 export default function Home() {
-  const todayLesson = useQuery(api.lessons.getToday);
+  const router = useRouter();
+  const today = getTodayWarsaw();
+
   const stats = useQuery(api.sessions.getStats);
   const dueCards = useQuery(api.cards.getDue, { limit: 999 });
+  const todayExercises = useQuery(api.exercises.getByDate, { date: today });
+  const milestones = useQuery(api.milestones.getAll);
 
-  const { year: wYear, month: wMonth, dateStr: today } = getNowWarsaw();
-  const monthStart = `${wYear}-${String(wMonth + 1).padStart(2, "0")}-01`;
-  const monthLessons = useQuery(api.lessons.listRange, { from: monthStart, to: today });
-  const monthSessions = useQuery(api.sessions.getByDateRange, { from: monthStart, to: today });
+  // Count exercises per type
+  const exerciseCounts = useMemo(() => {
+    if (!todayExercises) return {};
+    const counts: Record<string, number> = {};
+    for (const ex of todayExercises) {
+      counts[ex.type] = (counts[ex.type] ?? 0) + 1;
+    }
+    return counts;
+  }, [todayExercises]);
 
-  const missedCount = useMemo(() => {
-    if (!monthLessons || !monthSessions) return 0;
-    const sessionDates = new Set(monthSessions.map((s) => s.date));
-    return monthLessons.filter((l) => l.date < today && !sessionDates.has(l.date)).length;
-  }, [monthLessons, monthSessions, today]);
-
-  // Find matching unit for today's lesson
-  const currentUnit = useMemo(() => {
-    if (!todayLesson) return null;
-    return units.find(
-      (u) =>
-        u.theme.toLowerCase() === todayLesson.topic.toLowerCase() ||
-        u.theme_en.toLowerCase() === todayLesson.topic.toLowerCase()
-    ) || units[0];
-  }, [todayLesson]);
-
+  const totalExercises = todayExercises?.length ?? 0;
   const hasDueCards = dueCards && dueCards.length > 0;
+  const isFirstRun =
+    stats !== undefined &&
+    milestones !== undefined &&
+    stats.totalSessions === 0 &&
+    milestones.length === 0;
+
+  const handleModeSelect = (mode: ExerciseMode) => {
+    router.push(`/session/${today}?mode=${mode}`);
+  };
+
+  // Loading state
+  if (stats === undefined || todayExercises === undefined) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <Loader2 size={32} className="text-accent animate-spin" />
+      </main>
+    );
+  }
+
+  // First-run welcome screen
+  if (isFirstRun) {
+    return (
+      <main className="max-w-lg mx-auto pb-20 px-4 py-12 flex flex-col items-center gap-6 text-center">
+        <div className="space-y-2">
+          <p className="text-4xl">🇮🇹</p>
+          <h1 className="text-2xl font-bold">Ciao! Welcome to Marco</h1>
+          <p className="text-white/50">
+            Your adaptive Italian learning companion.
+          </p>
+        </div>
+        <div className="bg-card rounded-2xl border border-white/10 p-5 space-y-3 w-full text-left">
+          <h2 className="text-sm font-medium">How it works</h2>
+          <ul className="text-xs text-white/50 space-y-2">
+            <li>
+              <strong className="text-white/70">3 energy modes</strong> — Quick
+              (5 min), Standard (15 min), Deep (20 min)
+            </li>
+            <li>
+              <strong className="text-white/70">8 exercise types</strong> —
+              Flashcards, cloze, word builder, conversation, and more
+            </li>
+            <li>
+              <strong className="text-white/70">Adaptive</strong> — Exercises
+              adapt to your errors and progress
+            </li>
+          </ul>
+        </div>
+        <p className="text-xs text-white/30">
+          Exercises will appear after Marco&apos;s first nightly run.
+          {hasDueCards && " Meanwhile, try some flashcard practice!"}
+        </p>
+        {hasDueCards ? (
+          <Link
+            href="/practice"
+            className="px-6 py-3 bg-accent rounded-xl text-sm font-medium"
+          >
+            Practice SRS cards ({dueCards.length} due)
+          </Link>
+        ) : (
+          <Link
+            href="/progress"
+            className="px-6 py-3 bg-card rounded-xl border border-white/10 text-sm"
+          >
+            View Progress
+          </Link>
+        )}
+      </main>
+    );
+  }
 
   return (
-    <main className="max-w-lg mx-auto pb-20 px-4 py-4 flex flex-col gap-4">
-      {/* Stats Summary */}
+    <main className="max-w-lg mx-auto pb-20 px-4 py-4 flex flex-col gap-5">
+      {/* Stats bar */}
       {stats && (
         <div className="flex items-center justify-center gap-6 py-1">
           <div className="flex items-center gap-1.5">
@@ -51,106 +116,72 @@ export default function Home() {
             <span className="text-lg font-bold">{stats.masteredCards}</span>
             <span className="text-xs text-white/40">mastered</span>
           </div>
-          <div className="text-xs text-white/30">
-            {stats.totalCards} cards · {stats.totalSessions} sessions
-          </div>
+          {hasDueCards && (
+            <div className="flex items-center gap-1.5">
+              <Zap size={14} className="text-yellow-400" />
+              <span className="text-sm font-medium">{dueCards.length}</span>
+              <span className="text-xs text-white/40">due</span>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Missed lessons banner */}
-      {missedCount > 0 && (
-        <Link href="/calendar">
-          <div className="bg-danger/10 border border-danger/20 rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-danger/15 transition cursor-pointer">
-            <AlertTriangle size={18} className="text-danger flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-danger">
-                {missedCount} missed lesson{missedCount > 1 ? "s" : ""}
-              </p>
-              <p className="text-xs text-white/30">Tap to catch up</p>
-            </div>
-            <CalendarDays size={16} className="text-white/30" />
-          </div>
-        </Link>
-      )}
+      {/* Today's date header */}
+      <div className="text-center">
+        <p className="text-xs text-white/30">{today}</p>
+        <h1 className="text-lg font-semibold mt-0.5">
+          {totalExercises > 0
+            ? `${totalExercises} exercises ready`
+            : "No exercises today"}
+        </h1>
+      </div>
 
-      {/* Today's Lesson — Unit-focused */}
-      {todayLesson && currentUnit ? (
-        <Link href={`/lesson/${today}`}>
-          <div className="bg-gradient-to-br from-accent/20 to-accent/5 rounded-2xl border border-accent/30 p-5 space-y-3 hover:border-accent/50 transition cursor-pointer">
-            <div className="flex items-center gap-2">
-              <BookOpen size={20} className="text-accent-light" />
-              <span className="text-sm font-medium text-accent-light">
-                Unit {currentUnit.unit}
-              </span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent-light">
-                {currentUnit.level}
-              </span>
-            </div>
-            <h2 className="text-xl font-semibold">{currentUnit.theme}</h2>
-            <p className="text-white/50 text-sm">{currentUnit.theme_en}</p>
-            <div className="flex items-center gap-3 text-xs text-white/30">
-              <span>📝 {currentUnit.grammar_point}</span>
-            </div>
-            <div className="flex items-center gap-3 text-xs text-white/30">
-              <span>📍 {currentUnit.scenario.title}</span>
-              <span>·</span>
-              <span>{currentUnit.vocab.length} words</span>
-              <span>·</span>
-              <span>{currentUnit.exercises.length} exercises</span>
-            </div>
-            <div className="pt-2">
-              <span className="px-4 py-2 bg-accent rounded-xl text-sm font-medium inline-block">
-                Start Lesson →
-              </span>
-            </div>
-          </div>
-        </Link>
-      ) : todayLesson ? (
-        <Link href={`/lesson/${today}`}>
-          <div className="bg-gradient-to-br from-accent/20 to-accent/5 rounded-2xl border border-accent/30 p-5 space-y-2 hover:border-accent/50 transition cursor-pointer">
-            <div className="flex items-center gap-2">
-              <BookOpen size={20} className="text-accent-light" />
-              <span className="text-sm font-medium text-accent-light">Today&apos;s Lesson</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent-light">
-                {todayLesson.level}
-              </span>
-            </div>
-            <h2 className="text-xl font-semibold">{todayLesson.topic}</h2>
-            <p className="text-white/50 text-sm italic">&ldquo;{todayLesson.question}&rdquo;</p>
-            <div className="pt-2">
-              <span className="px-4 py-2 bg-accent rounded-xl text-sm font-medium inline-block">
-                Start Lesson →
-              </span>
-            </div>
-          </div>
-        </Link>
+      {/* Mode selector or fallback */}
+      {totalExercises > 0 ? (
+        <ModeSelector
+          exerciseCounts={exerciseCounts}
+          onSelect={handleModeSelect}
+        />
       ) : (
         <div className="bg-card rounded-2xl border border-white/10 p-6 text-center space-y-2">
-          <BookOpen size={24} className="text-white/30 mx-auto" />
-          <p className="text-white/50">No lesson scheduled for today</p>
+          <p className="text-white/50">Exercises are generated Sunday night</p>
           <p className="text-xs text-white/30">
-            Head to Practice for flashcards or speaking
+            Or the nightly patch adds new ones based on your errors.
           </p>
+          {hasDueCards && (
+            <Link
+              href="/practice"
+              className="mt-3 inline-block px-4 py-2 bg-accent rounded-xl text-sm font-medium"
+            >
+              Practice SRS cards ({dueCards.length} due)
+            </Link>
+          )}
         </div>
       )}
 
-      {/* Quick Practice */}
-      <Link href="/practice">
-        <div className="bg-card rounded-2xl border border-white/10 p-5 flex items-center gap-4 hover:border-white/20 transition cursor-pointer">
-          <div className="w-12 h-12 rounded-xl bg-yellow-500/10 flex items-center justify-center flex-shrink-0">
-            <Zap size={24} className="text-yellow-400" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-medium">Practice</h3>
-            <p className="text-xs text-white/40">
+      {/* Quick actions */}
+      <div className="grid grid-cols-2 gap-3">
+        <Link href="/practice">
+          <div className="bg-card rounded-xl border border-white/10 p-4 hover:border-white/20 transition">
+            <Zap size={20} className="text-yellow-400 mb-2" />
+            <h3 className="text-sm font-medium">Practice</h3>
+            <p className="text-xs text-white/40 mt-0.5">
               {hasDueCards
-                ? `${dueCards.length} cards due · Flashcards & Speaking`
-                : "Flashcards & Speaking practice"}
+                ? `${dueCards.length} cards due`
+                : "Flashcards"}
             </p>
           </div>
-          <span className="text-white/30">→</span>
-        </div>
-      </Link>
+        </Link>
+        <Link href="/progress">
+          <div className="bg-card rounded-xl border border-white/10 p-4 hover:border-white/20 transition">
+            <BarChart3 size={20} className="text-accent-light mb-2" />
+            <h3 className="text-sm font-medium">Progress</h3>
+            <p className="text-xs text-white/40 mt-0.5">
+              {stats ? `${stats.totalSessions} sessions` : "View stats"}
+            </p>
+          </div>
+        </Link>
+      </div>
     </main>
   );
 }

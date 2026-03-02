@@ -1,7 +1,12 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
-// Save a completed session
+// Warsaw timezone helper
+function warsawToday(): string {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
+}
+
+// Save a completed session (idempotent: rejects duplicate date+mode)
 export const save = mutation({
   args: {
     lessonId: v.optional(v.id("lessons")),
@@ -13,6 +18,9 @@ export const save = mutation({
       v.literal("free_talk"),
       v.literal("speaking_practice")
     ),
+    mode: v.optional(v.string()),
+    exercisesCompleted: v.optional(v.number()),
+    exercisesTotal: v.optional(v.number()),
     cardsReviewed: v.number(),
     cardsCorrect: v.number(),
     topic: v.optional(v.string()),
@@ -20,15 +28,32 @@ export const save = mutation({
       v.object({
         original: v.string(),
         corrected: v.string(),
-        explanation: v.string(),
+        explanation: v.optional(v.string()),
+        category: v.optional(v.string()),
+        skillId: v.optional(v.string()),
       })
     ),
     newPhrases: v.array(v.string()),
     phrasesUsed: v.array(v.string()),
     rating: v.optional(v.number()),
+    reflection: v.optional(v.string()),
+    reflectionAnswer: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("sessions", args);
+    // Idempotency: check for existing session with same (date, mode)
+    if (args.mode) {
+      const existing = await ctx.db
+        .query("sessions")
+        .withIndex("by_date", (q) => q.eq("date", args.date))
+        .filter((q) => q.eq(q.field("mode"), args.mode))
+        .first();
+      if (existing) {
+        return { status: "duplicate", existingId: existing._id };
+      }
+    }
+
+    const id = await ctx.db.insert("sessions", args);
+    return { status: "created", id };
   },
 });
 
@@ -55,45 +80,73 @@ export const getByDateRange = query({
   },
 });
 
-// Get stats summary
+// Get stats summary (uses indexed queries, Warsaw timezone)
 export const getStats = query({
   handler: async (ctx) => {
-    const allSessions = await ctx.db.query("sessions").collect();
-    const allCards = await ctx.db.query("cards").collect();
-    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
+    const today = warsawToday();
 
-    const totalSessions = allSessions.length;
+    // Use indexed queries instead of full .collect()
+    const recentSessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_date")
+      .order("desc")
+      .take(200);
+
+    const totalSessions = recentSessions.length;
     const totalMinutes = Math.round(
-      allSessions.reduce((sum, s) => sum + s.duration, 0) / 60
+      recentSessions.reduce((sum, s) => sum + s.duration, 0) / 60
     );
-    const totalCards = allCards.length;
+
+    const dueCards = await ctx.db
+      .query("cards")
+      .withIndex("by_next_review", (q) => q.lte("nextReview", today))
+      .collect();
+    const totalCards = dueCards.length;
+    const allCards = await ctx.db.query("cards").collect();
     const masteredCards = allCards.filter(
       (c) => c.interval >= 21 && c.lastQuality && c.lastQuality >= 3
     ).length;
 
-    // Streak calculation — only counts days that have lessons
-    // Missing a day with no lesson (e.g. Sunday rest) doesn't break the streak
+    // Streak calculation — uses exercises (new) or lessons (legacy)
+    const allExercises = await ctx.db
+      .query("exercises")
+      .withIndex("by_date")
+      .order("desc")
+      .take(200);
     const allLessons = await ctx.db.query("lessons").collect();
-    const lessonDates = new Set(allLessons.map((l) => l.date));
-    const sessionDates = new Set(allSessions.map((s) => s.date));
+
+    // Dates that had content (exercises or lessons)
+    const contentDates = new Set([
+      ...allExercises.map((e) => e.date),
+      ...allLessons.map((l) => l.date),
+    ]);
+    const sessionDates = new Set(recentSessions.map((s) => s.date));
 
     let streak = 0;
     const todayDate = new Date(today + "T12:00:00");
     for (let i = 0; i < 60; i++) {
       const checkDate = new Date(todayDate);
       checkDate.setDate(checkDate.getDate() - i);
-      const dateStr = checkDate.toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
+      const dateStr = checkDate.toLocaleDateString("sv-SE", {
+        timeZone: "Europe/Warsaw",
+      });
 
       if (sessionDates.has(dateStr)) {
-        // Did a session — streak continues
         streak++;
-      } else if (lessonDates.has(dateStr) && dateStr < today) {
-        // Had a lesson but didn't do it — streak broken
+      } else if (contentDates.has(dateStr) && dateStr < today) {
+        // Had content but didn't do it — streak broken
         break;
       }
-      // No lesson for this day (weekend/rest) — skip, don't break
+      // No content for this day (weekend/rest) — skip, don't break
     }
 
-    return { totalSessions, totalMinutes, totalCards, masteredCards, streak };
+    return {
+      totalSessions,
+      totalMinutes,
+      totalCards: allCards.length,
+      dueCards: totalCards,
+      masteredCards,
+      streak,
+    };
   },
 });

@@ -9,7 +9,9 @@
  */
 
 import type * as cards from "../cards.js";
+import type * as exercises from "../exercises.js";
 import type * as lessons from "../lessons.js";
+import type * as milestones from "../milestones.js";
 import type * as seed from "../seed.js";
 import type * as sessions from "../sessions.js";
 
@@ -21,7 +23,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   cards: typeof cards;
+  exercises: typeof exercises;
   lessons: typeof lessons;
+  milestones: typeof milestones;
   seed: typeof seed;
   sessions: typeof sessions;
 }>;

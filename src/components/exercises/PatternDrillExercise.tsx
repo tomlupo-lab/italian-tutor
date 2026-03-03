@@ -25,13 +25,7 @@ export default function PatternDrillExercise({ content, onComplete }: Props) {
   const startTime = useRef(Date.now());
   const [showHint, setShowHint] = useState(false);
 
-  // Guard: malformed content (after hooks to satisfy Rules of Hooks)
-  if (!Array.isArray(c?.sentences) || c.sentences.length === 0) {
-    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
-  }
-
-  const sentence = c.sentences[currentIdx];
-  const isDone = currentIdx >= c.sentences.length;
+  const sentence = c?.sentences?.[currentIdx];
 
   const handleSubmit = useCallback(() => {
     if (!sentence || showFeedback) return;
@@ -50,7 +44,7 @@ export default function PatternDrillExercise({ content, onComplete }: Props) {
       setShowHint(false);
       setLastCorrect(false);
 
-      if (currentIdx + 1 >= c.sentences.length) {
+      if (currentIdx + 1 >= (c?.sentences?.length ?? 0)) {
         // All done
         const allAnswers = [...answers, input.trim()];
         const allScores = [...scores, correct];
@@ -64,8 +58,14 @@ export default function PatternDrillExercise({ content, onComplete }: Props) {
         setCurrentIdx((i) => i + 1);
       }
     }, correct ? 800 : 1800);
-  }, [input, sentence, showFeedback, currentIdx, c.sentences.length, answers, scores, onComplete]);
+  }, [input, sentence, showFeedback, currentIdx, c?.sentences?.length, answers, scores, onComplete]);
 
+  // Guard: malformed content (after all hooks)
+  if (!Array.isArray(c?.sentences) || c.sentences.length === 0) {
+    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
+  }
+
+  const isDone = currentIdx >= c.sentences.length;
   if (isDone) return null;
 
   return (

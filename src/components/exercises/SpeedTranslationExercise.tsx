@@ -22,27 +22,21 @@ export default function SpeedTranslationExercise({
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
   const [scores, setScores] = useState<boolean[]>([]);
-  const [timeLeft, setTimeLeft] = useState(c.time_limit_seconds);
+  const [timeLeft, setTimeLeft] = useState(c?.time_limit_seconds ?? 90);
   const [showFeedback, setShowFeedback] = useState(false);
   const [finished, setFinished] = useState(false);
   const startTime = useRef(Date.now());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Guard: malformed content
-  if (!Array.isArray(c?.sentences) || c.sentences.length === 0) {
-    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
-  }
-
-  const sentence = c.sentences[currentIdx];
-  const total = c.sentences.length;
+  const sentence = c?.sentences?.[currentIdx];
+  const total = c?.sentences?.length ?? 0;
 
   // Timer
   useEffect(() => {
-    if (finished) return;
+    if (finished || total === 0) return;
     timerRef.current = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
-          // Time's up — finish with unanswered
           clearInterval(timerRef.current!);
           return 0;
         }
@@ -52,12 +46,11 @@ export default function SpeedTranslationExercise({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [finished]);
+  }, [finished, total]);
 
   // Handle time running out
   useEffect(() => {
-    if (timeLeft > 0 || finished) return;
-    // Pad remaining answers with -1
+    if (timeLeft > 0 || finished || total === 0) return;
     const remaining = total - answers.length;
     const paddedAnswers = [...answers, ...Array(remaining).fill(-1)];
     const paddedScores = [...scores, ...Array(remaining).fill(false)];
@@ -68,14 +61,14 @@ export default function SpeedTranslationExercise({
       answers: paddedAnswers,
       scores: paddedScores,
       total_correct: totalCorrect,
-      time_ms: c.time_limit_seconds * 1000,
+      time_ms: (c?.time_limit_seconds ?? 90) * 1000,
     };
     onComplete(result);
-  }, [timeLeft, finished, answers, scores, total, c.time_limit_seconds, onComplete]);
+  }, [timeLeft, finished, answers, scores, total, c?.time_limit_seconds, onComplete]);
 
   const handleSelect = useCallback(
     (idx: number) => {
-      if (showFeedback || finished) return;
+      if (showFeedback || finished || !sentence) return;
 
       const correct = idx === sentence.correct;
       setAnswers((prev) => [...prev, idx]);
@@ -85,7 +78,6 @@ export default function SpeedTranslationExercise({
       setTimeout(() => {
         setShowFeedback(false);
         if (currentIdx + 1 >= total) {
-          // All answered
           setFinished(true);
           if (timerRef.current) clearInterval(timerRef.current);
           const allAnswers = [...answers, idx];
@@ -104,6 +96,11 @@ export default function SpeedTranslationExercise({
     },
     [showFeedback, finished, sentence, currentIdx, total, answers, scores, onComplete],
   );
+
+  // Guard: malformed content (after all hooks)
+  if (!Array.isArray(c?.sentences) || c.sentences.length === 0) {
+    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
+  }
 
   if (finished) return null;
 

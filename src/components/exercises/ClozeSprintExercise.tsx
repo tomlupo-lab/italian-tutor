@@ -16,11 +16,6 @@ export default function ClozeSprintExercise({ content, onComplete }: Props) {
   const [showResult, setShowResult] = useState(false);
   const startTime = useRef(Date.now());
 
-  // Guard: malformed content
-  if (!c?.sentence || !Array.isArray(c?.options)) {
-    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
-  }
-
   const handleSelect = useCallback(
     (idx: number) => {
       if (showResult) return;
@@ -54,6 +49,11 @@ export default function ClozeSprintExercise({ content, onComplete }: Props) {
     u.rate = 0.85;
     window.speechSynthesis.speak(u);
   }, [c]);
+
+  // Guard: malformed content (after all hooks)
+  if (!c?.sentence || !Array.isArray(c?.options)) {
+    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
+  }
 
   return (
     <div className="bg-card rounded-2xl border border-white/10 p-5 space-y-5">

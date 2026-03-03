@@ -59,10 +59,6 @@ export default function ConversationExercise({ content, onComplete }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
 
-  // Guard: malformed content (after hooks to satisfy Rules of Hooks)
-  if (!c?.scenario || !Array.isArray(c?.target_phrases)) {
-    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
-  }
   const sttSupported =
     typeof window !== "undefined" &&
     ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
@@ -73,6 +69,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
 
   // Open with Marco's greeting
   useEffect(() => {
+    if (!c?.scenario) return;
     const opening: ChatMessage = {
       role: "assistant",
       content: `Ciao! ${c.scenario}`,
@@ -208,6 +205,11 @@ export default function ConversationExercise({ content, onComplete }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [messages, c, usedPhrases, errors, finishConversation],
   );
+
+  // Guard: malformed content (after all hooks)
+  if (!c?.scenario || !Array.isArray(c?.target_phrases)) {
+    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
+  }
 
   const handleEndConversation = () => {
     finishConversation(errors, messages);

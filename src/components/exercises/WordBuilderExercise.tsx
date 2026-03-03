@@ -17,18 +17,6 @@ export default function WordBuilderExercise({ content, onComplete }: Props) {
   const [isCorrect, setIsCorrect] = useState(false);
   const startTime = useRef(Date.now());
 
-  // Guard: malformed content (after hooks to satisfy Rules of Hooks)
-  if (!Array.isArray(c?.scrambled_words) || c.scrambled_words.length === 0) {
-    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
-  }
-
-  const available = c.scrambled_words
-    .map((_, i) => i)
-    .filter((i) => !placed.includes(i));
-
-  const builtSentence = placed.map((i) => c.scrambled_words[i]).join(" ");
-  const targetWords = c.target_sentence.split(" ");
-
   const handleTapWord = useCallback(
     (idx: number) => {
       if (showResult) return;
@@ -69,6 +57,11 @@ export default function WordBuilderExercise({ content, onComplete }: Props) {
       correct ? 800 : 2000,
     );
   }, [placed, c, onComplete]);
+
+  // Guard: malformed content (after all hooks)
+  if (!Array.isArray(c?.scrambled_words) || c.scrambled_words.length === 0) {
+    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
+  }
 
   return (
     <div className="bg-card rounded-2xl border border-white/10 p-5 space-y-5">

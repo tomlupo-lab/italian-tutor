@@ -22,11 +22,6 @@ export default function ErrorHuntExercise({ content, onComplete }: Props) {
   );
   const [phase, setPhase] = useState<"flag" | "correct" | "review">("flag");
   const [showResults, setShowResults] = useState(false);
-
-  // Guard: malformed content (after hooks to satisfy Rules of Hooks)
-  if (!Array.isArray(c?.sentences) || c.sentences.length === 0) {
-    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
-  }
   const startTime = useRef(Date.now());
 
   const handleToggleFlag = useCallback(
@@ -91,7 +86,12 @@ export default function ErrorHuntExercise({ content, onComplete }: Props) {
     };
 
     setTimeout(() => onComplete(result), 3000);
-  }, [c.sentences, flagged, corrections, onComplete]);
+  }, [c?.sentences, flagged, corrections, onComplete]);
+
+  // Guard: malformed content (after all hooks)
+  if (!Array.isArray(c?.sentences) || c.sentences.length === 0) {
+    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
+  }
 
   return (
     <div className="bg-card rounded-2xl border border-white/10 p-5 space-y-4">

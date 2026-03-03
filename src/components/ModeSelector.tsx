@@ -3,77 +3,102 @@
 import type { ExerciseMode } from "@/lib/exerciseTypes";
 import { MODE_TYPES } from "@/lib/exerciseTypes";
 import { cn } from "@/lib/cn";
-import { Zap, Monitor, Brain } from "lucide-react";
+import { Trophy, RotateCcw } from "lucide-react";
+import { useState, useEffect } from "react";
 
 interface ModeSelectorProps {
-  /** Number of exercises available per type (from Convex exercises.getByDate) */
   exerciseCounts: Record<string, number>;
   onSelect: (mode: ExerciseMode) => void;
-  /** Suggested mode based on time of day */
   suggested?: ExerciseMode;
+}
+
+// Local storage for tier completion tracking
+const TIER_KEY = "italian-tutor-tier-scores";
+
+interface TierScore {
+  completed: boolean;
+  bestScore: number;
+  lastCompleted?: string;
+}
+
+function loadTierScores(): Record<string, Record<string, TierScore>> {
+  if (typeof window === "undefined") return {};
+  const raw = localStorage.getItem(TIER_KEY);
+  return raw ? JSON.parse(raw) : {};
+}
+
+function getTierScore(date: string, mode: string): TierScore | null {
+  const data = loadTierScores();
+  return data[date]?.[mode] ?? null;
 }
 
 const MODES: {
   mode: ExerciseMode;
   label: string;
+  emoji: string;
   duration: string;
-  icon: typeof Zap;
   description: string;
   color: string;
 }[] = [
   {
     mode: "quick",
-    label: "Quick",
-    duration: "5 min",
-    icon: Zap,
-    description: "SRS, cloze, vocab drills",
-    color: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30",
+    label: "Bronze",
+    emoji: "🥉",
+    duration: "~5 min",
+    description: "SRS flashcards, cloze, word builder",
+    color: "from-amber-700/20 to-amber-800/5 border-amber-600/30",
   },
   {
     mode: "standard",
-    label: "Standard",
-    duration: "10-15 min",
-    icon: Monitor,
-    description: "Full exercises + conversation",
-    color: "from-accent/20 to-accent/5 border-accent/30",
+    label: "Silver",
+    emoji: "🥈",
+    duration: "~10 min",
+    description: "Pattern drills, speed translation, error hunt",
+    color: "from-slate-400/20 to-slate-500/5 border-slate-400/30",
   },
   {
     mode: "deep",
-    label: "Deep",
-    duration: "15-20 min",
-    icon: Brain,
-    description: "Everything + reflection",
-    color: "from-purple-500/20 to-purple-600/5 border-purple-500/30",
+    label: "Gold",
+    emoji: "🥇",
+    duration: "~15 min",
+    description: "Conversation scenario + reflection",
+    color: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30",
   },
 ];
-
-function getSuggestedMode(): ExerciseMode {
-  const hour = new Date().getHours();
-  if (hour >= 6 && hour < 12) return "standard";
-  if (hour >= 12 && hour < 18) return "standard";
-  return "quick"; // evenings
-}
 
 export default function ModeSelector({
   exerciseCounts,
   onSelect,
-  suggested,
 }: ModeSelectorProps) {
-  const suggestedMode = suggested ?? getSuggestedMode();
+  const [scores, setScores] = useState<Record<string, TierScore | null>>({});
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
+
+  useEffect(() => {
+    setScores({
+      quick: getTierScore(today, "quick"),
+      standard: getTierScore(today, "standard"),
+      deep: getTierScore(today, "deep"),
+    });
+  }, [today]);
+
+  const completedCount = Object.values(scores).filter(s => s?.completed).length;
 
   return (
     <div className="space-y-3">
-      <h2 className="text-sm font-medium text-white/50 px-1">
-        Choose your session
-      </h2>
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-sm font-medium text-white/50">Choose your level</h2>
+        {completedCount > 0 && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-success/20 text-success font-medium">
+            {completedCount}/3 complete
+          </span>
+        )}
+      </div>
       <div className="space-y-2">
-        {MODES.map(({ mode, label, duration, icon: Icon, description, color }) => {
+        {MODES.map(({ mode, label, emoji, duration, description, color }) => {
           const types = MODE_TYPES[mode];
-          const count = types.reduce(
-            (sum, t) => sum + (exerciseCounts[t] ?? 0),
-            0,
-          );
-          const isSuggested = mode === suggestedMode;
+          const count = types.reduce((sum, t) => sum + (exerciseCounts[t] ?? 0), 0);
+          const score = scores[mode];
+          const isCompleted = score?.completed ?? false;
 
           return (
             <button
@@ -87,24 +112,29 @@ export default function ModeSelector({
               )}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-                  <Icon size={20} />
-                </div>
+                <div className="text-2xl flex-shrink-0">{emoji}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{label}</span>
                     <span className="text-xs text-white/40">{duration}</span>
-                    {isSuggested && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">
-                        Suggested
+                    {isCompleted && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-success/20 text-success">
+                        ✓ Done
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-white/40 mt-0.5">{description}</p>
+                  {score && score.bestScore > 0 && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <Trophy size={10} className="text-yellow-400" />
+                      <span className="text-xs text-yellow-400/80">Best: {score.bestScore}%</span>
+                    </div>
+                  )}
                 </div>
-                <span className="text-sm text-white/40 tabular-nums flex-shrink-0">
-                  {count} ex
-                </span>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  <span className="text-sm text-white/40 tabular-nums">{count} ex</span>
+                  {isCompleted && <RotateCcw size={12} className="text-white/20" />}
+                </div>
               </div>
             </button>
           );

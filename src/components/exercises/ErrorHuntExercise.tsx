@@ -16,18 +16,17 @@ interface Props {
 
 export default function ErrorHuntExercise({ content, onComplete }: Props) {
   const c = content as ErrorHuntContent;
-
-  // Guard: malformed content
-  if (!Array.isArray(c?.sentences) || c.sentences.length === 0) {
-    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
-  }
-
   const [flagged, setFlagged] = useState<Set<number>>(new Set());
   const [corrections, setCorrections] = useState<Map<number, string>>(
     new Map(),
   );
   const [phase, setPhase] = useState<"flag" | "correct" | "review">("flag");
   const [showResults, setShowResults] = useState(false);
+
+  // Guard: malformed content (after hooks to satisfy Rules of Hooks)
+  if (!Array.isArray(c?.sentences) || c.sentences.length === 0) {
+    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
+  }
   const startTime = useRef(Date.now());
 
   const handleToggleFlag = useCallback(

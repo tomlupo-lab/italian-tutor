@@ -16,12 +16,6 @@ interface Props {
 
 export default function PatternDrillExercise({ content, onComplete }: Props) {
   const c = content as PatternDrillContent;
-
-  // Guard: malformed content
-  if (!Array.isArray(c?.sentences) || c.sentences.length === 0) {
-    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
-  }
-
   const [currentIdx, setCurrentIdx] = useState(0);
   const [input, setInput] = useState("");
   const [answers, setAnswers] = useState<string[]>([]);
@@ -29,10 +23,15 @@ export default function PatternDrillExercise({ content, onComplete }: Props) {
   const [showFeedback, setShowFeedback] = useState(false);
   const [lastCorrect, setLastCorrect] = useState(false);
   const startTime = useRef(Date.now());
+  const [showHint, setShowHint] = useState(false);
+
+  // Guard: malformed content (after hooks to satisfy Rules of Hooks)
+  if (!Array.isArray(c?.sentences) || c.sentences.length === 0) {
+    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
+  }
 
   const sentence = c.sentences[currentIdx];
   const isDone = currentIdx >= c.sentences.length;
-  const [showHint, setShowHint] = useState(false);
 
   const handleSubmit = useCallback(() => {
     if (!sentence || showFeedback) return;

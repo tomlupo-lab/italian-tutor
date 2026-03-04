@@ -156,14 +156,60 @@ function extractCorrectionCards(
         break;
       }
       case "conversation": {
-        // Conversation errors are already extracted to sessionErrors and
-        // handled separately — skip here to avoid duplicates.
+        // Conversation results contain errors detected by the AI tutor
+        const convResult = result as { errors?: Array<{ original: string; corrected: string; explanation?: string }> };
+        if (convResult.errors) {
+          for (const err of convResult.errors) {
+            if (err.original && err.corrected) {
+              cards.push({
+                it: err.corrected,
+                en: err.explanation || `${err.original} → ${err.corrected}`,
+                example: err.original,
+                source: "correction",
+                skillId: ex.skillId,
+                errorCategory: "conversation",
+              });
+            }
+          }
+        }
         break;
       }
     }
   }
 
   return cards;
+}
+
+/**
+ * Calls the AI enrichment API to improve correction card explanations,
+ * then updates each card in Convex with the better explanation.
+ */
+async function enrichCorrectionCards(
+  cards: CorrectionCard[],
+  updateFn: (args: { it: string; en: string }) => Promise<{ updated: boolean }>,
+) {
+  try {
+    const res = await fetch("/api/enrich-errors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cards: cards.map((c) => ({
+          it: c.it,
+          en: c.en,
+          errorCategory: c.errorCategory,
+        })),
+      }),
+    });
+    if (!res.ok) return;
+    const { enriched } = await res.json();
+    if (!enriched?.length) return;
+
+    for (const card of enriched as { it: string; en: string }[]) {
+      updateFn({ it: card.it, en: card.en }).catch(() => {});
+    }
+  } catch {
+    // Non-critical — original explanations remain
+  }
 }
 
 interface UseExerciseSessionOptions {
@@ -180,6 +226,7 @@ export function useExerciseSession({
   const saveSession = useMutation(api.sessions.save);
   const markComplete = useMutation(api.exercises.markComplete);
   const bulkAddCards = useMutation(api.cards.bulkAdd);
+  const updateCardExplanation = useMutation(api.cards.updateExplanation);
 
   const startedAt = useRef(Date.now());
   const [current, setCurrent] = useState(0);
@@ -292,9 +339,14 @@ export function useExerciseSession({
           // Extract correction cards from wrong answers and add to SRS deck
           const correctionCards = extractCorrectionCards(exercises, allResults);
           if (correctionCards.length > 0) {
-            bulkAddCards({ cards: correctionCards }).catch(() => {
-              // Non-critical — cards can be generated again
-            });
+            bulkAddCards({ cards: correctionCards })
+              .then(() => {
+                // Enrich card explanations with AI (fire and forget)
+                enrichCorrectionCards(correctionCards, updateCardExplanation);
+              })
+              .catch(() => {
+                // Non-critical — cards can be generated again
+              });
           }
 
           setError(null);
@@ -316,6 +368,7 @@ export function useExerciseSession({
       markComplete,
       saveSession,
       bulkAddCards,
+      updateCardExplanation,
       mode,
       date,
       sessionErrors,

@@ -149,6 +149,23 @@ export const bulkAdd = mutation({
   },
 });
 
+// Update a card's explanation (used by AI enrichment)
+export const updateExplanation = mutation({
+  args: {
+    it: v.string(),
+    en: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const card = await ctx.db
+      .query("cards")
+      .filter((q) => q.eq(q.field("it"), args.it))
+      .first();
+    if (!card) return { updated: false };
+    await ctx.db.patch(card._id, { en: args.en });
+    return { updated: true };
+  },
+});
+
 // Migrate cards from localStorage SRS data (one-time, deduplicates on it+en)
 export const migrateFromLocalStorage = mutation({
   args: {

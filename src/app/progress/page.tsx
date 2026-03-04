@@ -37,6 +37,50 @@ const MODE_META: { mode: string; label: string; emoji: string; color: string }[]
   { mode: "deep", label: "Gold", emoji: "🥇", color: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30" },
 ];
 
+function WeeklyTrends({ weeks }: { weeks: { label: string; sessions: number; minutes: number }[] }) {
+  if (weeks.length === 0 || !weeks.some((w) => w.sessions > 0)) return null;
+  const maxSessions = Math.max(...weeks.map((w) => w.sessions), 1);
+  const totalMinutes = weeks.reduce((sum, w) => sum + w.minutes, 0);
+
+  return (
+    <div className="bg-card rounded-2xl border border-white/10 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <TrendingUp size={14} className="text-accent-light" />
+          <h2 className="text-sm font-medium text-white/60">Weekly Activity</h2>
+        </div>
+        <span className="text-[10px] text-white/30">{totalMinutes} min total</span>
+      </div>
+      <div className="flex items-end gap-1.5 h-20">
+        {weeks.map((week, i) => {
+          const pct = maxSessions > 0 ? (week.sessions / maxSessions) * 100 : 0;
+          const isCurrentWeek = i === weeks.length - 1;
+          return (
+            <div key={week.label} className="flex-1 flex flex-col items-center gap-1">
+              <div className="w-full flex items-end justify-center" style={{ height: "60px" }}>
+                <div
+                  className={cn(
+                    "w-full max-w-[24px] rounded-t-md transition-all",
+                    isCurrentWeek ? "bg-accent" : "bg-white/10",
+                    week.sessions === 0 && "bg-white/5",
+                  )}
+                  style={{ height: `${Math.max(pct, 4)}%` }}
+                />
+              </div>
+              <span className={cn(
+                "text-[8px] leading-none",
+                isCurrentWeek ? "text-accent-light" : "text-white/20",
+              )}>
+                {week.label.split(" ")[0]}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function ProgressPage() {
   const milestones = useQuery(api.milestones.getAll);
   const stats = useQuery(api.sessions.getStats);
@@ -126,7 +170,7 @@ export default function ProgressPage() {
       weeks.push({
         label,
         sessions: weekSessions.length,
-        minutes: Math.round(weekSessions.reduce((sum, s) => sum + s.duration, 0) / 60),
+        minutes: Math.round(weekSessions.reduce((sum, s) => sum + s.duration, 0)),
       });
     }
     return weeks;
@@ -142,7 +186,7 @@ export default function ProgressPage() {
   }
 
   return (
-    <main className="max-w-lg mx-auto pb-20 px-4 py-4 flex flex-col gap-4">
+    <main className="max-w-lg mx-auto pb-24 px-4 py-4 flex flex-col gap-4">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link
@@ -212,47 +256,7 @@ export default function ProgressPage() {
       )}
 
       {/* Weekly Trends */}
-      {weeklyTrends.length > 0 && weeklyTrends.some((w) => w.sessions > 0) && (() => {
-        const maxSessions = Math.max(...weeklyTrends.map((w) => w.sessions), 1);
-        const totalWeekMinutes = weeklyTrends.reduce((sum, w) => sum + w.minutes, 0);
-        return (
-          <div className="bg-card rounded-2xl border border-white/10 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TrendingUp size={14} className="text-accent-light" />
-                <h2 className="text-sm font-medium text-white/60">Weekly Activity</h2>
-              </div>
-              <span className="text-[10px] text-white/30">{totalWeekMinutes} min total</span>
-            </div>
-            <div className="flex items-end gap-1.5 h-20">
-              {weeklyTrends.map((week, i) => {
-                const height = maxSessions > 0 ? (week.sessions / maxSessions) * 100 : 0;
-                const isCurrentWeek = i === weeklyTrends.length - 1;
-                return (
-                  <div key={week.label} className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-full flex items-end justify-center" style={{ height: "60px" }}>
-                      <div
-                        className={cn(
-                          "w-full max-w-[24px] rounded-t-md transition-all",
-                          isCurrentWeek ? "bg-accent" : "bg-white/10",
-                          week.sessions === 0 && "bg-white/5 min-h-[2px]",
-                        )}
-                        style={{ height: `${Math.max(height, 3)}%` }}
-                      />
-                    </div>
-                    <span className={cn(
-                      "text-[8px] leading-none",
-                      isCurrentWeek ? "text-accent-light" : "text-white/20",
-                    )}>
-                      {week.label.split(" ")[0]}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
+      <WeeklyTrends weeks={weeklyTrends} />
 
       {/* Mastered cards */}
       {stats && stats.masteredCards > 0 && (

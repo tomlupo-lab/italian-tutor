@@ -18,7 +18,6 @@ export default function Home() {
   const dueCards = useQuery(api.cards.getDue, { limit: 999 });
   const todayExercises = useQuery(api.exercises.getByDate, { date: today });
   const milestones = useQuery(api.milestones.getAll);
-  const modeCounts = useQuery(api.sessions.getModeCounts);
 
   // Count exercises per type
   const exerciseCounts = useMemo(() => {
@@ -142,7 +141,6 @@ export default function Home() {
         <ModeSelector
           exerciseCounts={exerciseCounts}
           onSelect={handleModeSelect}
-          sessionCounts={modeCounts ?? undefined}
         />
       ) : (
         <div className="bg-card rounded-2xl border border-white/10 p-6 text-center space-y-2">

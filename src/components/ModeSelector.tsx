@@ -104,7 +104,6 @@ export default function ModeSelector({
           const count = types.reduce((sum, t) => sum + (exerciseCounts[t] ?? 0), 0);
           const score = scores[mode];
           const isCompleted = score?.completed ?? false;
-          const totalCompleted = sessionCounts?.[mode] ?? 0;
 
           return (
             <button
@@ -139,9 +138,6 @@ export default function ModeSelector({
                 </div>
                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
                   <span className="text-sm text-white/40 tabular-nums">{count} ex</span>
-                  {totalCompleted > 0 && (
-                    <span className="text-[10px] text-white/25 tabular-nums">{totalCompleted}x done</span>
-                  )}
                   {isCompleted && <RotateCcw size={12} className="text-white/20" />}
                 </div>
               </div>

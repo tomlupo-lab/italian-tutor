@@ -159,7 +159,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Quick actions */}
+      {/* Quick links */}
       <div className="grid grid-cols-2 gap-3">
         <Link href="/practice">
           <div className="bg-card rounded-xl border border-white/10 p-4 hover:border-white/20 transition">

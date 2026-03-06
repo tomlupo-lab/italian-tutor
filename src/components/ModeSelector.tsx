@@ -11,7 +11,7 @@ interface ModeSelectorProps {
   onSelect: (mode: ExerciseMode) => void;
   suggested?: ExerciseMode;
   date?: string;
-  /** Total session completions per mode (e.g. { quick: 5, standard: 3, deep: 1 }) */
+  /** Total session completions per tier */
   sessionCounts?: Record<string, number>;
 }
 
@@ -64,7 +64,7 @@ const MODES: {
     label: "Gold",
     emoji: "🥇",
     duration: "~15 min",
-    description: "Conversation with Marco + reflection",
+    description: "Conversation with Marco",
     color: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30",
   },
 ];

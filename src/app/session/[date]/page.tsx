@@ -12,6 +12,12 @@ import ExerciseFlow from "@/components/exercises/ExerciseFlow";
 import ModeSelector from "@/components/ModeSelector";
 import { useState } from "react";
 
+const MODE_LABELS: Record<ExerciseMode, string> = {
+  quick: "Bronze",
+  standard: "Silver",
+  deep: "Gold",
+};
+
 export default function SessionPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -84,8 +90,8 @@ export default function SessionPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-sm font-semibold">
             {selectedMode
-              ? `${selectedMode.charAt(0).toUpperCase() + selectedMode.slice(1)} Session`
-              : "Choose Mode"}
+              ? `${MODE_LABELS[selectedMode]} Session`
+              : "Choose Tier"}
           </h1>
           <p className="text-xs text-white/30">{dateParam}</p>
         </div>
@@ -111,7 +117,7 @@ export default function SessionPage() {
       ) : modeExercises.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
           <p className="text-white/50">
-            No {selectedMode} exercises available
+            No {MODE_LABELS[selectedMode]} exercises available
           </p>
           <button
             onClick={() => setSelectedMode(null)}

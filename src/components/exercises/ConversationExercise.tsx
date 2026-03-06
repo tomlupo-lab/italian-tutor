@@ -9,7 +9,7 @@ import type {
   ExerciseResult,
 } from "@/lib/exerciseTypes";
 import { cn } from "@/lib/cn";
-import { Check, Mic, Send, Volume2 } from "lucide-react";
+import { Check, Mic, Send, Square, Volume2 } from "lucide-react";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -22,6 +22,17 @@ interface Props {
   onComplete: (result: ExerciseResult) => void;
 }
 
+function pickRecorderMimeType(): string | undefined {
+  if (typeof MediaRecorder === "undefined") return undefined;
+  const options = [
+    "audio/webm;codecs=opus",
+    "audio/mp4",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+  ];
+  return options.find((t) => MediaRecorder.isTypeSupported?.(t));
+}
+
 export default function ConversationExercise({ content, onComplete }: Props) {
   const c = content as ConversationContent;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -29,39 +40,55 @@ export default function ConversationExercise({ content, onComplete }: Props) {
   const [loading, setLoading] = useState(false);
   const [usedPhrases, setUsedPhrases] = useState<Set<string>>(new Set());
   const [errors, setErrors] = useState<ConversationError[]>([]);
+
   const [isRecording, setIsRecording] = useState(false);
-  const [transcript, setTranscript] = useState("");
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [audioPending, setAudioPending] = useState(false);
+  const [transcript, setTranscript] = useState("");
+
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [diagLines, setDiagLines] = useState<string[]>([]);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const startTimeRef = useRef(Date.now());
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
-  const recognitionWantedRef = useRef(false);
-  const recognitionRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const committedTranscriptRef = useRef("");
-  const micToggleLockRef = useRef(false);
-  const lastToggleAtRef = useRef(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const diagSessionIdRef = useRef("");
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
   const ttsRequestIdRef = useRef(0);
-  const diagSessionIdRef = useRef("");
-  const lastResultLogAtRef = useRef(0);
-  const sttLastResultAtRef = useRef(0);
-  const sttWatchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sttNoSpeechTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sttSpeechSeenRef = useRef(false);
 
-  const sttSupported =
+  const micSupported =
     typeof window !== "undefined" &&
-    ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
-  const isIOSWebKit =
-    typeof window !== "undefined" &&
-    /iPhone|iPad|iPod/i.test(window.navigator.userAgent);
+    typeof navigator !== "undefined" &&
+    Boolean(navigator.mediaDevices?.getUserMedia) &&
+    typeof MediaRecorder !== "undefined";
+
+  const logDiagnostic = useCallback(
+    (event: string, data: Record<string, unknown> = {}) => {
+      const ts = new Date().toISOString();
+      if (showDiagnostics) {
+        setDiagLines((prev) => [...prev.slice(-9), `${ts.slice(11, 19)} ${event}`]);
+      }
+      const payload = {
+        source: "conversation_mediarec",
+        event,
+        session_id: diagSessionIdRef.current || "unset",
+        data,
+      };
+      console.info("[mediarec-diag]", payload);
+      void fetch("/tutor/api/client-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch(() => undefined);
+    },
+    [showDiagnostics],
+  );
 
   const stopAudioPlayback = useCallback(() => {
     if (audioRef.current) {
@@ -79,31 +106,6 @@ export default function ConversationExercise({ content, onComplete }: Props) {
     setAudioPending(false);
   }, []);
 
-  const logDiagnostic = useCallback(
-    (event: string, data: Record<string, unknown> = {}) => {
-      const now = new Date();
-      const ts = now.toISOString();
-      const line = `${ts.slice(11, 19)} ${event}`;
-      if (showDiagnostics) {
-        setDiagLines((prev) => [...prev.slice(-7), line]);
-      }
-      const payload = {
-        source: "conversation_stt",
-        event,
-        session_id: diagSessionIdRef.current || "unset",
-        data,
-      };
-      console.info("[stt-diag]", payload);
-      void fetch("/tutor/api/client-log", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        keepalive: true,
-      }).catch(() => undefined);
-    },
-    [showDiagnostics],
-  );
-
   const playAssistantAudio = useCallback(
     async (text: string) => {
       if (!text.trim()) return;
@@ -119,10 +121,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
         });
 
         if (requestId !== ttsRequestIdRef.current) return;
-
-        if (!res.ok) {
-          throw new Error("tts_failed");
-        }
+        if (!res.ok) throw new Error("tts_failed");
 
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -132,9 +131,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
         audioUrlRef.current = url;
 
         audio.onended = () => {
-          if (audioRef.current === audio) {
-            audioRef.current = null;
-          }
+          if (audioRef.current === audio) audioRef.current = null;
           if (audioUrlRef.current === url) {
             URL.revokeObjectURL(url);
             audioUrlRef.current = null;
@@ -143,9 +140,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
         };
 
         audio.onerror = () => {
-          if (audioRef.current === audio) {
-            audioRef.current = null;
-          }
+          if (audioRef.current === audio) audioRef.current = null;
           if (audioUrlRef.current === url) {
             URL.revokeObjectURL(url);
             audioUrlRef.current = null;
@@ -172,373 +167,6 @@ export default function ConversationExercise({ content, onComplete }: Props) {
     [stopAudioPlayback],
   );
 
-  const clearRecognitionRestartTimer = useCallback(() => {
-    if (recognitionRestartTimerRef.current) {
-      clearTimeout(recognitionRestartTimerRef.current);
-      recognitionRestartTimerRef.current = null;
-    }
-  }, []);
-
-  const clearWatchdogTimer = useCallback(() => {
-    if (sttWatchdogTimerRef.current) {
-      clearTimeout(sttWatchdogTimerRef.current);
-      sttWatchdogTimerRef.current = null;
-    }
-  }, []);
-
-  const clearNoSpeechTimer = useCallback(() => {
-    if (sttNoSpeechTimerRef.current) {
-      clearTimeout(sttNoSpeechTimerRef.current);
-      sttNoSpeechTimerRef.current = null;
-    }
-  }, []);
-
-  const armWatchdogTimer = useCallback(() => {
-    clearWatchdogTimer();
-    sttWatchdogTimerRef.current = setTimeout(() => {
-      if (!recognitionWantedRef.current || loading || !recognitionRef.current) return;
-      if (Date.now() - sttLastResultAtRef.current < 4500) return;
-      logDiagnostic("stt_watchdog_restart");
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        // ignore
-      }
-    }, 6500);
-  }, [clearWatchdogTimer, loading, logDiagnostic]);
-
-  const armNoSpeechTimer = useCallback(() => {
-    clearNoSpeechTimer();
-    sttNoSpeechTimerRef.current = setTimeout(() => {
-      if (!recognitionWantedRef.current || loading || !recognitionRef.current) return;
-      if (sttSpeechSeenRef.current) return;
-      logDiagnostic("stt_no_speech_quick_restart");
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        // ignore
-      }
-    }, 2800);
-  }, [clearNoSpeechTimer, loading, logDiagnostic]);
-
-  const createRecognition = useCallback(() => {
-    if (!sttSupported) return null;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return null;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const recognition: any = new SR();
-    recognition.lang = "it-IT";
-    recognition.interimResults = true;
-    recognition.continuous = !isIOSWebKit;
-    recognition.maxAlternatives = 1;
-    recognition.onstart = () => {
-      sttLastResultAtRef.current = Date.now();
-      sttSpeechSeenRef.current = false;
-      logDiagnostic("stt_onstart", { continuous: recognition.continuous });
-      armWatchdogTimer();
-      armNoSpeechTimer();
-    };
-    recognition.onspeechstart = () => {
-      sttSpeechSeenRef.current = true;
-      clearNoSpeechTimer();
-      logDiagnostic("stt_onspeechstart");
-    };
-    recognition.onspeechend = () => logDiagnostic("stt_onspeechend");
-    recognition.onaudiostart = () => logDiagnostic("stt_onaudiostart");
-    recognition.onaudioend = () => logDiagnostic("stt_onaudioend");
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onresult = (event: any) => {
-      let finalText = "";
-      let interimText = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const segment = event.results[i][0]?.transcript ?? "";
-        if (event.results[i].isFinal) {
-          finalText += segment;
-        } else {
-          interimText += segment;
-        }
-      }
-      if (finalText) {
-        committedTranscriptRef.current = `${committedTranscriptRef.current} ${finalText}`.trim();
-      }
-      const merged = `${committedTranscriptRef.current} ${interimText}`.trim();
-      setTranscript(merged);
-      const now = Date.now();
-      sttLastResultAtRef.current = now;
-      if (finalText.length > 0 || interimText.length > 0) {
-        sttSpeechSeenRef.current = true;
-        clearNoSpeechTimer();
-      }
-      armWatchdogTimer();
-      if (finalText || now - lastResultLogAtRef.current > 2000) {
-        lastResultLogAtRef.current = now;
-        logDiagnostic("stt_result", {
-          final_len: finalText.length,
-          interim_len: interimText.length,
-          merged_len: merged.length,
-        });
-      }
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onerror = (event: any) => {
-      logDiagnostic("stt_error", {
-        error: String(event?.error || "unknown"),
-        message: String(event?.message || ""),
-      });
-      recognitionRef.current = null;
-      setIsRecording(false);
-      if (!recognitionWantedRef.current) {
-        return;
-      }
-      const fatalErrors = new Set(["not-allowed", "service-not-allowed", "audio-capture"]);
-      if (fatalErrors.has(event?.error)) {
-        recognitionWantedRef.current = false;
-        clearNoSpeechTimer();
-        clearWatchdogTimer();
-        return;
-      }
-      clearRecognitionRestartTimer();
-      recognitionRestartTimerRef.current = setTimeout(() => {
-        if (!recognitionWantedRef.current || loading || recognitionRef.current) return;
-        const next = createRecognition();
-        if (!next) {
-          setIsRecording(false);
-          return;
-        }
-        try {
-          next.start();
-          recognitionRef.current = next;
-          setIsRecording(true);
-          logDiagnostic("stt_restart_after_error");
-        } catch {
-          setIsRecording(false);
-          logDiagnostic("stt_restart_after_error_failed");
-        }
-      }, 260);
-    };
-
-    recognition.onend = () => {
-      clearNoSpeechTimer();
-      clearWatchdogTimer();
-      logDiagnostic("stt_end", {
-        wanted: recognitionWantedRef.current,
-      });
-      recognitionRef.current = null;
-      if (!recognitionWantedRef.current) {
-        setIsRecording(false);
-        return;
-      }
-      clearRecognitionRestartTimer();
-      recognitionRestartTimerRef.current = setTimeout(() => {
-        if (!recognitionWantedRef.current || loading) return;
-        const next = createRecognition();
-        if (!next) {
-          setIsRecording(false);
-          return;
-        }
-        try {
-          next.start();
-          recognitionRef.current = next;
-          setIsRecording(true);
-          logDiagnostic("stt_restart_after_end");
-        } catch {
-          setIsRecording(false);
-          logDiagnostic("stt_restart_after_end_failed");
-        }
-      }, 180);
-    };
-
-    return recognition;
-  }, [
-    armWatchdogTimer,
-    armNoSpeechTimer,
-    clearRecognitionRestartTimer,
-    clearNoSpeechTimer,
-    clearWatchdogTimer,
-    isIOSWebKit,
-    loading,
-    logDiagnostic,
-    sttSupported,
-  ]);
-
-  const stopRecording = useCallback(() => {
-    logDiagnostic("stt_stop_requested", {
-      has_ref: Boolean(recognitionRef.current),
-    });
-    recognitionWantedRef.current = false;
-    clearNoSpeechTimer();
-    clearWatchdogTimer();
-    clearRecognitionRestartTimer();
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        // ignore stop race
-      }
-    }
-    recognitionRef.current = null;
-    setIsRecording(false);
-  }, [
-    clearNoSpeechTimer,
-    clearRecognitionRestartTimer,
-    clearWatchdogTimer,
-    logDiagnostic,
-  ]);
-
-  const startRecording = useCallback(() => {
-    if (!sttSupported || loading) {
-      logDiagnostic("stt_start_blocked", {
-        stt_supported: sttSupported,
-        loading,
-      });
-      return;
-    }
-    if (audioPending) {
-      stopAudioPlayback();
-      logDiagnostic("audio_stopped_before_stt");
-    }
-    recognitionWantedRef.current = true;
-    committedTranscriptRef.current = "";
-    sttLastResultAtRef.current = Date.now();
-    sttSpeechSeenRef.current = false;
-    setTranscript("");
-    clearNoSpeechTimer();
-    clearWatchdogTimer();
-    clearRecognitionRestartTimer();
-    logDiagnostic("stt_start_requested");
-
-    const recognition = createRecognition();
-    if (!recognition) {
-      recognitionWantedRef.current = false;
-      setIsRecording(false);
-      logDiagnostic("stt_create_failed");
-      return;
-    }
-
-    try {
-      recognition.start();
-      recognitionRef.current = recognition;
-      setIsRecording(true);
-      logDiagnostic("stt_start_ok");
-    } catch {
-      // Mobile engines can throw InvalidStateError if restarted too quickly.
-      setIsRecording(false);
-      logDiagnostic("stt_start_failed_retrying");
-      clearRecognitionRestartTimer();
-      recognitionRestartTimerRef.current = setTimeout(() => {
-        if (!recognitionWantedRef.current || loading || recognitionRef.current) return;
-        const retry = createRecognition();
-        if (!retry) {
-          recognitionWantedRef.current = false;
-          setIsRecording(false);
-          return;
-        }
-        try {
-          retry.start();
-          recognitionRef.current = retry;
-          setIsRecording(true);
-          logDiagnostic("stt_retry_start_ok");
-        } catch {
-          recognitionWantedRef.current = false;
-          setIsRecording(false);
-          logDiagnostic("stt_retry_start_failed");
-        }
-      }, 280);
-    }
-  }, [
-    audioPending,
-    clearRecognitionRestartTimer,
-    clearNoSpeechTimer,
-    clearWatchdogTimer,
-    createRecognition,
-    loading,
-    logDiagnostic,
-    stopAudioPlayback,
-    sttSupported,
-  ]);
-
-  const toggleRecording = useCallback(() => {
-    const now = Date.now();
-    if (micToggleLockRef.current || now - lastToggleAtRef.current < 320) {
-      logDiagnostic("stt_toggle_ignored_locked");
-      return;
-    }
-    micToggleLockRef.current = true;
-    lastToggleAtRef.current = now;
-    setTimeout(() => {
-      micToggleLockRef.current = false;
-    }, 300);
-
-    if (isRecording || recognitionWantedRef.current) {
-      logDiagnostic("stt_toggle_stop");
-      stopRecording();
-    } else {
-      logDiagnostic("stt_toggle_start");
-      startRecording();
-    }
-  }, [isRecording, logDiagnostic, startRecording, stopRecording]);
-
-  useEffect(() => {
-    const search =
-      typeof window !== "undefined" ? window.location.search : "";
-    const debugEnabled = search.includes("sttDebug=1");
-    setShowDiagnostics(debugEnabled);
-    diagSessionIdRef.current = `${Date.now().toString(36)}-${Math.random()
-      .toString(36)
-      .slice(2, 8)}`;
-    logDiagnostic("diag_init", {
-      stt_supported: sttSupported,
-      user_agent:
-        typeof window !== "undefined" ? window.navigator.userAgent : "unknown",
-      debug_enabled: debugEnabled,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  useEffect(() => {
-    return () => {
-      recognitionWantedRef.current = false;
-      clearNoSpeechTimer();
-      clearWatchdogTimer();
-      clearRecognitionRestartTimer();
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch {
-          // ignore stop race on unmount
-        }
-      }
-      stopAudioPlayback();
-      logDiagnostic("diag_unmount");
-    };
-  }, [
-    clearRecognitionRestartTimer,
-    clearNoSpeechTimer,
-    clearWatchdogTimer,
-    logDiagnostic,
-    stopAudioPlayback,
-  ]);
-
-  // Open with Marco's greeting
-  useEffect(() => {
-    if (!c?.scenario) return;
-    const opening: ChatMessage = {
-      role: "assistant",
-      content: `Ciao! ${c.scenario}`,
-    };
-    setMessages([opening]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const checkPhrasesUsed = (text: string) => {
     const lower = text.toLowerCase();
     const newUsed = new Set(usedPhrases);
@@ -553,10 +181,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
   const finishConversation = useCallback(
     (finalErrors: ConversationError[], finalMessages: ChatMessage[]) => {
       const result: ConversationResult = {
-        messages: finalMessages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })) as ConversationMessage[],
+        messages: finalMessages.map((m) => ({ role: m.role, content: m.content })) as ConversationMessage[],
         errors: finalErrors,
         duration_ms: Date.now() - startTimeRef.current,
       };
@@ -579,10 +204,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            messages: newMessages.map((m) => ({
-              role: m.role,
-              content: m.content,
-            })),
+            messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
             systemPrompt: c.system_prompt || undefined,
             lessonType: "structured_unit",
             scenarioTitle: c.scenario,
@@ -598,7 +220,6 @@ export default function ConversationExercise({ content, onComplete }: Props) {
         if (data.error) throw new Error(data.error);
 
         const rawContent = data.content as string;
-
         const jsonMatch = rawContent.match(/```json\s*([\s\S]*?)```/);
         let correction: ChatMessage["correction"] | undefined;
         let cleanContent = rawContent;
@@ -616,9 +237,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
               if (parsed.errors) {
                 setErrors((prev) => {
                   const existing = new Set(prev.map((e) => e.original));
-                  const newErrs = (parsed.errors as ConversationError[]).filter(
-                    (e) => !existing.has(e.original),
-                  );
+                  const newErrs = (parsed.errors as ConversationError[]).filter((e) => !existing.has(e.original));
                   return [...prev, ...newErrs];
                 });
               }
@@ -627,11 +246,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
                 ...(parsed.correction ? [parsed.correction] : []),
                 ...((parsed.errors as ConversationError[]) || []),
               ];
-              const assistantMsg: ChatMessage = {
-                role: "assistant",
-                content: cleanContent,
-                correction,
-              };
+              const assistantMsg: ChatMessage = { role: "assistant", content: cleanContent, correction };
               const finalMsgs = [...newMessages, assistantMsg];
               setMessages(finalMsgs);
               void playAssistantAudio(cleanContent);
@@ -643,19 +258,12 @@ export default function ConversationExercise({ content, onComplete }: Props) {
           }
         }
 
-        const assistantMsg: ChatMessage = {
-          role: "assistant",
-          content: cleanContent,
-          correction,
-        };
+        const assistantMsg: ChatMessage = { role: "assistant", content: cleanContent, correction };
         setMessages((prev) => [...prev, assistantMsg]);
         void playAssistantAudio(cleanContent);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: `Error: ${errMsg}` },
-        ]);
+        setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${errMsg}` }]);
       } finally {
         setLoading(false);
       }
@@ -664,26 +272,194 @@ export default function ConversationExercise({ content, onComplete }: Props) {
     [messages, c, usedPhrases, errors, finishConversation, playAssistantAudio],
   );
 
+  const stopMediaTracks = useCallback(() => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
+  }, []);
+
+  const transcribeRecording = useCallback(
+    async (blob: Blob) => {
+      if (!blob || blob.size < 800) {
+        logDiagnostic("stt_blob_too_small", { size: blob?.size || 0 });
+        return;
+      }
+      setIsTranscribing(true);
+      logDiagnostic("stt_transcribe_start", { size: blob.size, type: blob.type });
+      try {
+        const form = new FormData();
+        const ext = blob.type.includes("mp4") ? "m4a" : "webm";
+        form.append("audio", new File([blob], `recording.${ext}`, { type: blob.type || "audio/webm" }));
+        form.append("language", "it");
+
+        const res = await fetch("/tutor/api/stt", {
+          method: "POST",
+          body: form,
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error || `stt_${res.status}`);
+        }
+
+        const text = String(data.text || "").trim();
+        logDiagnostic("stt_transcribe_done", { len: text.length });
+        setTranscript(text);
+        if (text) {
+          void sendMessage(text);
+        }
+      } catch (err) {
+        logDiagnostic("stt_transcribe_error", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        setIsTranscribing(false);
+      }
+    },
+    [logDiagnostic, sendMessage],
+  );
+
+  const stopRecording = useCallback(() => {
+    logDiagnostic("stt_stop_requested", { has_rec: Boolean(mediaRecorderRef.current) });
+    const rec = mediaRecorderRef.current;
+    if (!rec) {
+      setIsRecording(false);
+      stopMediaTracks();
+      return;
+    }
+    try {
+      if (rec.state !== "inactive") {
+        rec.stop();
+      }
+    } catch {
+      // ignore recorder stop race
+    }
+    setIsRecording(false);
+  }, [logDiagnostic, stopMediaTracks]);
+
+  const startRecording = useCallback(async () => {
+    if (!micSupported || loading || isTranscribing) {
+      logDiagnostic("stt_start_blocked", {
+        mic_supported: micSupported,
+        loading,
+        is_transcribing: isTranscribing,
+      });
+      return;
+    }
+
+    stopAudioPlayback();
+    setTranscript("");
+    recordedChunksRef.current = [];
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      mediaStreamRef.current = stream;
+
+      const mimeType = pickRecorderMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data && event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onerror = (event) => {
+        logDiagnostic("stt_recorder_error", {
+          name: event.error?.name || "unknown",
+          message: event.error?.message || "",
+        });
+        setIsRecording(false);
+        stopMediaTracks();
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        logDiagnostic("stt_recording_stopped", { size: blob.size, type: blob.type });
+        stopMediaTracks();
+        void transcribeRecording(blob);
+      };
+
+      recorder.start(250);
+      setIsRecording(true);
+      logDiagnostic("stt_start_ok", { mime: recorder.mimeType || "unknown" });
+    } catch (err) {
+      logDiagnostic("stt_start_error", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      setIsRecording(false);
+      stopMediaTracks();
+    }
+  }, [
+    isTranscribing,
+    loading,
+    logDiagnostic,
+    micSupported,
+    stopAudioPlayback,
+    stopMediaTracks,
+    transcribeRecording,
+  ]);
+
+  const toggleRecording = useCallback(() => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      void startRecording();
+    }
+  }, [isRecording, startRecording, stopRecording]);
+
+  useEffect(() => {
+    const search = typeof window !== "undefined" ? window.location.search : "";
+    const debugEnabled = search.includes("sttDebug=1");
+    setShowDiagnostics(debugEnabled);
+    diagSessionIdRef.current = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    logDiagnostic("diag_init", {
+      mic_supported: micSupported,
+      user_agent: typeof window !== "undefined" ? window.navigator.userAgent : "unknown",
+      debug_enabled: debugEnabled,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        mediaRecorderRef.current?.stop();
+      } catch {
+        // ignore
+      }
+      stopMediaTracks();
+      stopAudioPlayback();
+      logDiagnostic("diag_unmount");
+    };
+  }, [logDiagnostic, stopAudioPlayback, stopMediaTracks]);
+
+  useEffect(() => {
+    if (!c?.scenario) return;
+    const opening: ChatMessage = { role: "assistant", content: `Ciao! ${c.scenario}` };
+    setMessages([opening]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (!c?.scenario || !Array.isArray(c?.target_phrases)) {
-    return (
-      <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">
-        Exercise data missing
-      </div>
-    );
+    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
   }
 
   const handleEndConversation = () => {
     finishConversation(errors, messages);
-  };
-
-  const sendTranscript = () => {
-    const text = transcript.trim();
-    if (!text) return;
-    logDiagnostic("stt_send_transcript", { len: text.length });
-    stopRecording();
-    setTranscript("");
-    committedTranscriptRef.current = "";
-    void sendMessage(text);
   };
 
   const insertPhrase = (phrase: string) => {
@@ -694,9 +470,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
     <div className="flex flex-col min-h-0 flex-1 w-full max-w-[430px] mx-auto rounded-2xl border border-white/10 bg-card/20 overflow-hidden">
       <div className="px-4 py-3 bg-gradient-to-r from-teal-900/30 to-teal-800/10 border-b border-teal-500/10 rounded-t-2xl">
         <p className="text-sm font-medium text-teal-300">{c.scenario}</p>
-        {c.grammar_focus && (
-          <p className="text-xs text-white/40 mt-0.5">Focus: {c.grammar_focus}</p>
-        )}
+        {c.grammar_focus && <p className="text-xs text-white/40 mt-0.5">Focus: {c.grammar_focus}</p>}
       </div>
 
       {c.target_phrases.length > 0 && (
@@ -730,9 +504,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-teal-300 text-xs font-medium">Marco</span>
                   <button
-                    onClick={() => {
-                      void playAssistantAudio(msg.content);
-                    }}
+                    onClick={() => void playAssistantAudio(msg.content)}
                     className="text-white/30 hover:text-teal-300 transition p-0.5"
                     aria-label="Play message audio"
                   >
@@ -793,18 +565,15 @@ export default function ConversationExercise({ content, onComplete }: Props) {
         </div>
       )}
 
-      {isRecording && (
+      {(isRecording || isTranscribing) && (
         <div className="px-4 py-2 bg-danger/10 border-t border-danger/20">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-danger animate-pulse" />
-            <span className="text-xs text-danger font-medium">Recording...</span>
+            <span className="text-xs text-danger font-medium">
+              {isRecording ? "Recording..." : "Transcribing..."}
+            </span>
           </div>
           {transcript && <p className="text-sm text-white/70 mt-1 italic">{transcript}</p>}
-          {showDiagnostics && (
-            <p className="text-[10px] text-white/50 mt-1">
-              dbg: rec={String(isRecording)} wanted={String(recognitionWantedRef.current)} load={String(loading)} audio={String(audioPending)}
-            </p>
-          )}
         </div>
       )}
 
@@ -819,68 +588,46 @@ export default function ConversationExercise({ content, onComplete }: Props) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (isRecording && transcript.trim()) sendTranscript();
-          else if (input.trim() && !loading) void sendMessage(input.trim());
+          if (input.trim() && !loading && !isTranscribing && !isRecording) {
+            void sendMessage(input.trim());
+          }
         }}
         className="px-4 py-3 border-t border-white/5 flex gap-2"
       >
-        {!isRecording ? (
-          <>
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Scrivi in italiano..."
-              className="flex-1 bg-card border border-white/10 rounded-xl px-4 py-3 text-[16px] focus:outline-none focus:border-accent/50 transition"
-            />
-            {sttSupported && (
-              <button
-                type="button"
-                onClick={toggleRecording}
-                disabled={loading}
-                className="p-3 rounded-xl bg-white/5 hover:bg-white/10 transition disabled:opacity-40"
-                aria-label="Start voice recording"
-              >
-                <Mic size={18} />
-              </button>
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Scrivi in italiano..."
+          className="flex-1 bg-card border border-white/10 rounded-xl px-4 py-3 text-[16px] focus:outline-none focus:border-accent/50 transition"
+          disabled={loading || isRecording || isTranscribing}
+        />
+        {micSupported && (
+          <button
+            type="button"
+            onClick={toggleRecording}
+            disabled={loading || isTranscribing}
+            className={cn(
+              "p-3 rounded-xl transition disabled:opacity-40",
+              isRecording
+                ? "bg-danger/30 hover:bg-danger/40 text-danger"
+                : "bg-white/5 hover:bg-white/10",
             )}
-            <button
-              type="submit"
-              disabled={!input.trim() || loading}
-              className="p-3 bg-accent rounded-xl disabled:opacity-30 hover:bg-accent/80 transition"
-              aria-label="Send message"
-            >
-              <Send size={18} />
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={toggleRecording}
-              className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition text-white/60"
-              aria-label="Stop recording"
-            >
-              ✕
-            </button>
-            <div className="flex-1 flex items-center justify-center text-sm text-white/40 px-2 truncate">
-              {transcript ? transcript.slice(-80) : "Parla..."}
-            </div>
-            <button
-              type="button"
-              onClick={sendTranscript}
-              disabled={!transcript.trim() || loading}
-              className="p-3 bg-accent rounded-xl disabled:opacity-30 hover:bg-accent/80 transition"
-              aria-label="Send recorded message"
-            >
-              <Send size={18} />
-            </button>
-          </>
+            aria-label={isRecording ? "Stop recording" : "Start voice recording"}
+          >
+            {isRecording ? <Square size={18} /> : <Mic size={18} />}
+          </button>
         )}
+        <button
+          type="submit"
+          disabled={!input.trim() || loading || isRecording || isTranscribing}
+          className="p-3 bg-accent rounded-xl disabled:opacity-30 hover:bg-accent/80 transition"
+          aria-label="Send message"
+        >
+          <Send size={18} />
+        </button>
       </form>
 
-      {audioPending && (
-        <div className="px-4 pb-1 text-[11px] text-teal-300/70">Playing audio...</div>
-      )}
+      {audioPending && <div className="px-4 pb-1 text-[11px] text-teal-300/70">Playing audio...</div>}
 
       {messages.length >= 4 && (
         <div className="px-4 pb-3">

@@ -45,6 +45,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [audioPending, setAudioPending] = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [tapToPlayText, setTapToPlayText] = useState("");
 
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [diagLines, setDiagLines] = useState<string[]>([]);
@@ -112,6 +113,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
       const requestId = ++ttsRequestIdRef.current;
       stopAudioPlayback();
       setAudioPending(true);
+      setTapToPlayText("");
 
       try {
         const res = await fetch("/tutor/api/tts", {
@@ -156,12 +158,21 @@ export default function ConversationExercise({ content, onComplete }: Props) {
           u.lang = "it-IT";
           u.rate = 0.92;
           u.onend = () => setAudioPending(false);
-          u.onerror = () => setAudioPending(false);
+          u.onerror = () => {
+            setAudioPending(false);
+            setTapToPlayText(text);
+          };
           window.speechSynthesis.cancel();
-          window.speechSynthesis.speak(u);
+          try {
+            window.speechSynthesis.speak(u);
+          } catch {
+            setAudioPending(false);
+            setTapToPlayText(text);
+          }
           return;
         }
         setAudioPending(false);
+        setTapToPlayText(text);
       }
     },
     [stopAudioPlayback],
@@ -574,6 +585,18 @@ export default function ConversationExercise({ content, onComplete }: Props) {
             </span>
           </div>
           {transcript && <p className="text-sm text-white/70 mt-1 italic">{transcript}</p>}
+        </div>
+      )}
+
+      {tapToPlayText && !isRecording && !isTranscribing && (
+        <div className="px-4 py-2 border-t border-white/5">
+          <button
+            type="button"
+            onClick={() => void playAssistantAudio(tapToPlayText)}
+            className="w-full py-2 rounded-xl bg-teal-900/30 border border-teal-500/30 text-teal-200 text-sm hover:bg-teal-900/40 transition"
+          >
+            Tap to play assistant audio
+          </button>
         </div>
       )}
 

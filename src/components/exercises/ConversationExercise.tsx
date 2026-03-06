@@ -176,11 +176,34 @@ export default function ConversationExercise({ content, onComplete }: Props) {
       setTranscript(merged);
     };
 
-    recognition.onerror = () => {
-      // On recoverable errors, onend will run and we auto-restart if user still wants recording.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onerror = (event: any) => {
+      recognitionRef.current = null;
+      setIsRecording(false);
       if (!recognitionWantedRef.current) {
-        setIsRecording(false);
+        return;
       }
+      const fatalErrors = new Set(["not-allowed", "service-not-allowed", "audio-capture"]);
+      if (fatalErrors.has(event?.error)) {
+        recognitionWantedRef.current = false;
+        return;
+      }
+      clearRecognitionRestartTimer();
+      recognitionRestartTimerRef.current = setTimeout(() => {
+        if (!recognitionWantedRef.current || loading || recognitionRef.current) return;
+        const next = createRecognition();
+        if (!next) {
+          setIsRecording(false);
+          return;
+        }
+        try {
+          next.start();
+          recognitionRef.current = next;
+          setIsRecording(true);
+        } catch {
+          setIsRecording(false);
+        }
+      }, 260);
     };
 
     recognition.onend = () => {
@@ -243,8 +266,26 @@ export default function ConversationExercise({ content, onComplete }: Props) {
       recognitionRef.current = recognition;
       setIsRecording(true);
     } catch {
-      recognitionWantedRef.current = false;
+      // Mobile engines can throw InvalidStateError if restarted too quickly.
       setIsRecording(false);
+      clearRecognitionRestartTimer();
+      recognitionRestartTimerRef.current = setTimeout(() => {
+        if (!recognitionWantedRef.current || loading || recognitionRef.current) return;
+        const retry = createRecognition();
+        if (!retry) {
+          recognitionWantedRef.current = false;
+          setIsRecording(false);
+          return;
+        }
+        try {
+          retry.start();
+          recognitionRef.current = retry;
+          setIsRecording(true);
+        } catch {
+          recognitionWantedRef.current = false;
+          setIsRecording(false);
+        }
+      }, 280);
     }
   }, [clearRecognitionRestartTimer, createRecognition, loading, sttSupported]);
 

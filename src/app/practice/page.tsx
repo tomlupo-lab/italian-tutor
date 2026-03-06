@@ -77,6 +77,12 @@ export default function PracticePage() {
   const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = new URLSearchParams(window.location.search).get("tag");
+    if (raw) setSelectedTag(raw);
+  }, []);
+
+  useEffect(() => {
     if (filteredCards && filteredCards.length > 0) {
       try {
         localStorage.setItem("marco-cards-snapshot", JSON.stringify(filteredCards));

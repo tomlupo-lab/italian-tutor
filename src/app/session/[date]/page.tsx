@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { useParams, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import type { Exercise, ExerciseMode } from "@/lib/exerciseTypes";
@@ -19,6 +20,7 @@ const MODE_LABELS: Record<ExerciseMode, string> = {
 };
 
 export default function SessionPage() {
+  const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
   const dateParam = params.date as string;
@@ -30,6 +32,49 @@ export default function SessionPage() {
 
   const allExercises = useQuery(api.exercises.getByDate, { date: dateParam });
   const modeCounts = useQuery(api.sessions.getModeCounts);
+  const dueCards = useQuery(api.cards.getDue, { limit: 200 });
+
+  const inferredTopicTag = useMemo(() => {
+    if (!allExercises || allExercises.length === 0) return "";
+    const bag: string[] = [];
+    for (const ex of allExercises as Exercise[]) {
+      if (ex.skillId) bag.push(ex.skillId);
+      if (ex.type === "conversation") {
+        const c = ex.content as { scenario?: string; target_phrases?: string[] };
+        if (c?.scenario) bag.push(c.scenario);
+        if (Array.isArray(c?.target_phrases)) bag.push(c.target_phrases.join(" "));
+      }
+      if (ex.type === "srs") {
+        const c = ex.content as { front?: string; back?: string };
+        if (c?.front) bag.push(c.front);
+        if (c?.back) bag.push(c.back);
+      }
+    }
+    const hay = bag.join(" ").toLowerCase();
+    const tagRules: Array<{ tag: string; words: string[] }> = [
+      { tag: "home", words: ["casa", "appartamento", "quartiere", "camera", "soggiorno"] },
+      { tag: "food", words: ["ristorante", "cibo", "piatto", "mangiare", "cucina"] },
+      { tag: "travel", words: ["viaggio", "treno", "vacanza", "hotel", "aeroporto"] },
+      { tag: "work", words: ["lavoro", "ufficio", "riunione", "progetto"] },
+      { tag: "sport", words: ["sport", "allenamento", "partita", "campione"] },
+      { tag: "fitness", words: ["palestra", "allenarsi", "stretching", "benessere"] },
+      { tag: "tech", words: ["tecnologia", "software", "codice", "app"] },
+      { tag: "routine", words: ["giornata", "mattina", "abitudine", "quotidiana"] },
+    ];
+    let bestTag = "";
+    let bestScore = 0;
+    for (const rule of tagRules) {
+      const score = rule.words.reduce(
+        (acc, w) => (hay.includes(w) ? acc + 1 : acc),
+        0,
+      );
+      if (score > bestScore) {
+        bestScore = score;
+        bestTag = rule.tag;
+      }
+    }
+    return bestTag;
+  }, [allExercises]);
 
   // Count exercises per type (for mode selector)
   const exerciseCounts = useMemo(() => {
@@ -38,8 +83,25 @@ export default function SessionPage() {
     for (const ex of allExercises) {
       counts[ex.type] = (counts[ex.type] ?? 0) + 1;
     }
+    // Bronze must use the same SRS queue as /practice.
+    if (dueCards) {
+      counts.srs = inferredTopicTag
+        ? dueCards.filter((c) => c.tag === inferredTopicTag).length
+        : dueCards.length;
+    }
     return counts;
-  }, [allExercises]);
+  }, [allExercises, dueCards, inferredTopicTag]);
+
+  useEffect(() => {
+    if (selectedMode !== "quick") return;
+    const p = new URLSearchParams({
+      from: "session",
+      mode: "bronze",
+      date: dateParam,
+    });
+    if (inferredTopicTag) p.set("tag", inferredTopicTag);
+    router.push(`/practice?${p.toString()}`);
+  }, [dateParam, inferredTopicTag, router, selectedMode]);
 
   // Filter exercises by mode
   const modeExercises = useMemo(() => {
@@ -113,6 +175,13 @@ export default function SessionPage() {
             onSelect={setSelectedMode}
             sessionCounts={modeCounts ?? undefined}
           />
+        </div>
+      ) : selectedMode === "quick" ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4">
+          <Loader2 size={24} className="text-accent animate-spin" />
+          <p className="text-sm text-white/60">
+            Opening Bronze SRS practice...
+          </p>
         </div>
       ) : modeExercises.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 px-4">

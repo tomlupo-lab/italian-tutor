@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Flame, Trophy, Zap, BarChart3, Loader2 } from "lucide-react";
 import { getTodayWarsaw } from "../lib/date";
 import ModeSelector from "../components/ModeSelector";
+import SkillsWidget from "../components/SkillsWidget";
 import { useRouter } from "next/navigation";
 import type { ExerciseMode } from "@/lib/exerciseTypes";
 import { getWeekWindow, getWeeklyMission } from "@/lib/weeklyMission";
@@ -199,6 +200,9 @@ export default function Home() {
           )}
         </div>
       )}
+
+      {/* Skills Progress Widget */}
+      <SkillsWidget />
 
       {/* Quick links */}
       <div className="grid grid-cols-2 gap-3">

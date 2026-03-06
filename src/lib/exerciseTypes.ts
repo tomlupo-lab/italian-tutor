@@ -10,8 +10,8 @@ export type ExerciseMode = "quick" | "standard" | "deep";
 /** Which exercise types appear in each mode */
 /** Each tier has UNIQUE exercise types — no overlap between tiers */
 export const MODE_TYPES: Record<ExerciseMode, ExerciseType[]> = {
-  quick: ["srs", "cloze", "word_builder"],
-  standard: ["pattern_drill", "speed_translation", "error_hunt"],
+  quick: ["srs"],
+  standard: ["cloze", "word_builder", "pattern_drill", "speed_translation", "error_hunt"],
   deep: ["conversation", "reflection"],
 };
 

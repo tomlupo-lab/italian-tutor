@@ -48,7 +48,7 @@ const MODES: {
     label: "Bronze",
     emoji: "🥉",
     duration: "~5 min",
-    description: "SRS flashcards, cloze, word builder",
+    description: "SRS flashcard review",
     color: "from-amber-700/20 to-amber-800/5 border-amber-600/30",
   },
   {
@@ -56,7 +56,7 @@ const MODES: {
     label: "Silver",
     emoji: "🥈",
     duration: "~10 min",
-    description: "Pattern drills, speed translation, error hunt",
+    description: "Cloze, drills, translation, error hunt",
     color: "from-slate-400/20 to-slate-500/5 border-slate-400/30",
   },
   {
@@ -64,7 +64,7 @@ const MODES: {
     label: "Gold",
     emoji: "🥇",
     duration: "~15 min",
-    description: "Conversation scenario + reflection",
+    description: "Conversation with Marco + reflection",
     color: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30",
   },
 ];

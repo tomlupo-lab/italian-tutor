@@ -9,6 +9,7 @@ import type { Exercise, ExerciseResult } from "@/lib/exerciseTypes";
 import { Loader2, RefreshCw, Target, Shuffle, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { apiPath } from "@/lib/paths";
+import Link from "next/link";
 
 type PracticeMode = "errors" | "random" | "typed";
 
@@ -282,6 +283,21 @@ export default function ExercisesPage() {
               </div>
             </div>
           </button>
+
+          <Link
+            href="/practice"
+            className="w-full block text-left rounded-2xl border p-4 transition active:scale-[0.98] bg-gradient-to-br from-yellow-500/15 to-yellow-500/5 border-yellow-500/20"
+          >
+            <div className="flex items-center gap-3">
+              <RefreshCw size={24} className="text-yellow-300 flex-shrink-0" />
+              <div className="flex-1">
+                <span className="font-semibold">Cards (SRS)</span>
+                <p className="text-xs text-white/40 mt-0.5">
+                  Open spaced-repetition flashcards
+                </p>
+              </div>
+            </div>
+          </Link>
         </div>
 
         {/* By exercise type */}

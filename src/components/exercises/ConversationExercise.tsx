@@ -11,34 +11,6 @@ import type {
 import { cn } from "@/lib/cn";
 import { Check, Mic, Send, Volume2 } from "lucide-react";
 
-async function playTTS(text: string) {
-  try {
-    const res = await fetch("/tutor/api/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    if (!res.ok) return;
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    try {
-      await audio.play();
-    } catch {
-      URL.revokeObjectURL(url);
-      return;
-    }
-    audio.onended = () => URL.revokeObjectURL(url);
-  } catch {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "it-IT";
-      u.rate = 0.9;
-      speechSynthesis.speak(u);
-    }
-  }
-}
-
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -59,18 +31,259 @@ export default function ConversationExercise({ content, onComplete }: Props) {
   const [errors, setErrors] = useState<ConversationError[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [audioPending, setAudioPending] = useState(false);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const startTimeRef = useRef(Date.now());
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
+  const recognitionWantedRef = useRef(false);
+  const recognitionRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const committedTranscriptRef = useRef("");
+  const micToggleLockRef = useRef(false);
+  const lastToggleAtRef = useRef(0);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+  const ttsRequestIdRef = useRef(0);
 
   const sttSupported =
     typeof window !== "undefined" &&
     ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
 
+  const stopAudioPlayback = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    setAudioPending(false);
+  }, []);
+
+  const playAssistantAudio = useCallback(
+    async (text: string) => {
+      if (!text.trim()) return;
+      const requestId = ++ttsRequestIdRef.current;
+      stopAudioPlayback();
+      setAudioPending(true);
+
+      try {
+        const res = await fetch("/tutor/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+
+        if (requestId !== ttsRequestIdRef.current) return;
+
+        if (!res.ok) {
+          throw new Error("tts_failed");
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+
+        audioRef.current = audio;
+        audioUrlRef.current = url;
+
+        audio.onended = () => {
+          if (audioRef.current === audio) {
+            audioRef.current = null;
+          }
+          if (audioUrlRef.current === url) {
+            URL.revokeObjectURL(url);
+            audioUrlRef.current = null;
+          }
+          setAudioPending(false);
+        };
+
+        audio.onerror = () => {
+          if (audioRef.current === audio) {
+            audioRef.current = null;
+          }
+          if (audioUrlRef.current === url) {
+            URL.revokeObjectURL(url);
+            audioUrlRef.current = null;
+          }
+          setAudioPending(false);
+        };
+
+        await audio.play();
+      } catch {
+        if (requestId !== ttsRequestIdRef.current) return;
+        if (typeof window !== "undefined" && window.speechSynthesis) {
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = "it-IT";
+          u.rate = 0.92;
+          u.onend = () => setAudioPending(false);
+          u.onerror = () => setAudioPending(false);
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(u);
+          return;
+        }
+        setAudioPending(false);
+      }
+    },
+    [stopAudioPlayback],
+  );
+
+  const clearRecognitionRestartTimer = useCallback(() => {
+    if (recognitionRestartTimerRef.current) {
+      clearTimeout(recognitionRestartTimerRef.current);
+      recognitionRestartTimerRef.current = null;
+    }
+  }, []);
+
+  const createRecognition = useCallback(() => {
+    if (!sttSupported) return null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recognition: any = new SR();
+    recognition.lang = "it-IT";
+    recognition.interimResults = true;
+    recognition.continuous = true;
+    recognition.maxAlternatives = 1;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (event: any) => {
+      let finalText = "";
+      let interimText = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const segment = event.results[i][0]?.transcript ?? "";
+        if (event.results[i].isFinal) {
+          finalText += segment;
+        } else {
+          interimText += segment;
+        }
+      }
+      if (finalText) {
+        committedTranscriptRef.current = `${committedTranscriptRef.current} ${finalText}`.trim();
+      }
+      const merged = `${committedTranscriptRef.current} ${interimText}`.trim();
+      setTranscript(merged);
+    };
+
+    recognition.onerror = () => {
+      // On recoverable errors, onend will run and we auto-restart if user still wants recording.
+      if (!recognitionWantedRef.current) {
+        setIsRecording(false);
+      }
+    };
+
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      if (!recognitionWantedRef.current) {
+        setIsRecording(false);
+        return;
+      }
+      clearRecognitionRestartTimer();
+      recognitionRestartTimerRef.current = setTimeout(() => {
+        if (!recognitionWantedRef.current || loading) return;
+        const next = createRecognition();
+        if (!next) {
+          setIsRecording(false);
+          return;
+        }
+        try {
+          next.start();
+          recognitionRef.current = next;
+          setIsRecording(true);
+        } catch {
+          setIsRecording(false);
+        }
+      }, 180);
+    };
+
+    return recognition;
+  }, [clearRecognitionRestartTimer, loading, sttSupported]);
+
+  const stopRecording = useCallback(() => {
+    recognitionWantedRef.current = false;
+    clearRecognitionRestartTimer();
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // ignore stop race
+      }
+    }
+    recognitionRef.current = null;
+    setIsRecording(false);
+  }, [clearRecognitionRestartTimer]);
+
+  const startRecording = useCallback(() => {
+    if (!sttSupported || loading) return;
+    recognitionWantedRef.current = true;
+    committedTranscriptRef.current = "";
+    setTranscript("");
+    clearRecognitionRestartTimer();
+
+    const recognition = createRecognition();
+    if (!recognition) {
+      recognitionWantedRef.current = false;
+      setIsRecording(false);
+      return;
+    }
+
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+      setIsRecording(true);
+    } catch {
+      recognitionWantedRef.current = false;
+      setIsRecording(false);
+    }
+  }, [clearRecognitionRestartTimer, createRecognition, loading, sttSupported]);
+
+  const toggleRecording = useCallback(() => {
+    const now = Date.now();
+    if (micToggleLockRef.current || now - lastToggleAtRef.current < 320) {
+      return;
+    }
+    micToggleLockRef.current = true;
+    lastToggleAtRef.current = now;
+    setTimeout(() => {
+      micToggleLockRef.current = false;
+    }, 300);
+
+    if (isRecording || recognitionWantedRef.current) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }, [isRecording, startRecording, stopRecording]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    return () => {
+      recognitionWantedRef.current = false;
+      clearRecognitionRestartTimer();
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {
+          // ignore stop race on unmount
+        }
+      }
+      stopAudioPlayback();
+    };
+  }, [clearRecognitionRestartTimer, stopAudioPlayback]);
 
   // Open with Marco's greeting
   useEffect(() => {
@@ -128,7 +341,6 @@ export default function ConversationExercise({ content, onComplete }: Props) {
               content: m.content,
             })),
             systemPrompt: c.system_prompt || undefined,
-            // Fallback fields for the API's built-in prompt builder
             lessonType: "structured_unit",
             scenarioTitle: c.scenario,
             scenarioSetup: c.scenario,
@@ -144,7 +356,6 @@ export default function ConversationExercise({ content, onComplete }: Props) {
 
         const rawContent = data.content as string;
 
-        // Parse corrections from JSON block
         const jsonMatch = rawContent.match(/```json\s*([\s\S]*?)```/);
         let correction: ChatMessage["correction"] | undefined;
         let cleanContent = rawContent;
@@ -162,9 +373,9 @@ export default function ConversationExercise({ content, onComplete }: Props) {
               if (parsed.errors) {
                 setErrors((prev) => {
                   const existing = new Set(prev.map((e) => e.original));
-                  const newErrs = (
-                    parsed.errors as ConversationError[]
-                  ).filter((e) => !existing.has(e.original));
+                  const newErrs = (parsed.errors as ConversationError[]).filter(
+                    (e) => !existing.has(e.original),
+                  );
                   return [...prev, ...newErrs];
                 });
               }
@@ -180,12 +391,12 @@ export default function ConversationExercise({ content, onComplete }: Props) {
               };
               const finalMsgs = [...newMessages, assistantMsg];
               setMessages(finalMsgs);
-              playTTS(cleanContent);
+              void playAssistantAudio(cleanContent);
               setTimeout(() => finishConversation(allErrors, finalMsgs), 1500);
               return;
             }
           } catch {
-            /* ignore parse errors */
+            // ignore parse errors
           }
         }
 
@@ -195,7 +406,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
           correction,
         };
         setMessages((prev) => [...prev, assistantMsg]);
-        playTTS(cleanContent);
+        void playAssistantAudio(cleanContent);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         setMessages((prev) => [
@@ -207,85 +418,50 @@ export default function ConversationExercise({ content, onComplete }: Props) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [messages, c, usedPhrases, errors, finishConversation],
+    [messages, c, usedPhrases, errors, finishConversation, playAssistantAudio],
   );
 
-  // Guard: malformed content (after all hooks)
   if (!c?.scenario || !Array.isArray(c?.target_phrases)) {
-    return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
+    return (
+      <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">
+        Exercise data missing
+      </div>
+    );
   }
 
   const handleEndConversation = () => {
     finishConversation(errors, messages);
   };
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      recognitionRef.current?.stop();
-      setIsRecording(false);
-      return;
-    }
-    if (!sttSupported) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SR =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-    const recognition = new SR();
-    recognition.lang = "it-IT";
-    recognition.interimResults = true;
-    recognition.continuous = true;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onresult = (event: any) => {
-      let text = "";
-      for (let i = 0; i < event.results.length; i++) {
-        text += event.results[i][0].transcript;
-      }
-      setTranscript(text);
-    };
-    recognition.onerror = () => setIsRecording(false);
-    recognition.onend = () => setIsRecording(false);
-    recognition.start();
-    recognitionRef.current = recognition;
-    setTranscript("");
-    setIsRecording(true);
-  };
-
   const sendTranscript = () => {
-    if (transcript.trim()) {
-      recognitionRef.current?.stop();
-      setIsRecording(false);
-      sendMessage(transcript.trim());
-      setTranscript("");
-    }
+    const text = transcript.trim();
+    if (!text) return;
+    stopRecording();
+    setTranscript("");
+    committedTranscriptRef.current = "";
+    void sendMessage(text);
   };
 
   const insertPhrase = (phrase: string) => {
-    setInput((prev) => (prev ? prev + " " + phrase : phrase));
+    setInput((prev) => (prev ? `${prev} ${phrase}` : phrase));
   };
 
   return (
     <div className="flex flex-col min-h-0 flex-1 w-full max-w-[430px] mx-auto rounded-2xl border border-white/10 bg-card/20 overflow-hidden">
-      {/* Scenario header */}
       <div className="px-4 py-3 bg-gradient-to-r from-teal-900/30 to-teal-800/10 border-b border-teal-500/10 rounded-t-2xl">
         <p className="text-sm font-medium text-teal-300">{c.scenario}</p>
         {c.grammar_focus && (
-          <p className="text-xs text-white/40 mt-0.5">
-            Focus: {c.grammar_focus}
-          </p>
+          <p className="text-xs text-white/40 mt-0.5">Focus: {c.grammar_focus}</p>
         )}
       </div>
 
-      {/* Phrase progress */}
       {c.target_phrases.length > 0 && (
         <div className="px-4 py-2 border-b border-white/5 bg-card/30">
           <div className="flex items-center gap-2">
             <div className="flex-1 h-1.5 bg-white/5 rounded-full">
               <div
                 className="h-full bg-success rounded-full transition-all duration-500"
-                style={{
-                  width: `${(usedPhrases.size / c.target_phrases.length) * 100}%`,
-                }}
+                style={{ width: `${(usedPhrases.size / c.target_phrases.length) * 100}%` }}
               />
             </div>
             <span className="text-xs text-white/30">
@@ -295,7 +471,6 @@ export default function ConversationExercise({ content, onComplete }: Props) {
         </div>
       )}
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.map((msg, i) => (
           <div key={i}>
@@ -309,12 +484,13 @@ export default function ConversationExercise({ content, onComplete }: Props) {
             >
               {msg.role === "assistant" && (
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-teal-300 text-xs font-medium">
-                    Marco
-                  </span>
+                  <span className="text-teal-300 text-xs font-medium">Marco</span>
                   <button
-                    onClick={() => playTTS(msg.content)}
+                    onClick={() => {
+                      void playAssistantAudio(msg.content);
+                    }}
                     className="text-white/30 hover:text-teal-300 transition p-0.5"
+                    aria-label="Play message audio"
                   >
                     <Volume2 size={14} />
                   </button>
@@ -324,37 +500,23 @@ export default function ConversationExercise({ content, onComplete }: Props) {
             </div>
             {msg.correction && (
               <div className="max-w-[85%] ml-auto mt-1 bg-amber-900/20 border border-amber-500/20 rounded-xl px-3 py-2 text-xs break-words">
-                <p className="text-danger">
-                  {msg.correction.original}
-                </p>
-                <p className="text-success">
-                  {msg.correction.corrected}
-                </p>
-                <p className="text-white/40 mt-0.5">
-                  {msg.correction.explanation}
-                </p>
+                <p className="text-danger">{msg.correction.original}</p>
+                <p className="text-success">{msg.correction.corrected}</p>
+                <p className="text-white/40 mt-0.5">{msg.correction.explanation}</p>
               </div>
             )}
           </div>
         ))}
         {loading && (
           <div className="bg-teal-900/30 border border-teal-500/20 rounded-2xl px-4 py-3 self-start max-w-[85%]">
-            <span className="text-teal-300 text-xs font-medium block mb-1">
-              Marco
-            </span>
+            <span className="text-teal-300 text-xs font-medium block mb-1">Marco</span>
             <div className="flex gap-1">
-              <span className="animate-bounce">·</span>
-              <span
-                className="animate-bounce"
-                style={{ animationDelay: "0.1s" }}
-              >
-                ·
+              <span className="animate-bounce">.</span>
+              <span className="animate-bounce" style={{ animationDelay: "0.1s" }}>
+                .
               </span>
-              <span
-                className="animate-bounce"
-                style={{ animationDelay: "0.2s" }}
-              >
-                ·
+              <span className="animate-bounce" style={{ animationDelay: "0.2s" }}>
+                .
               </span>
             </div>
           </div>
@@ -362,7 +524,6 @@ export default function ConversationExercise({ content, onComplete }: Props) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Target phrase chips */}
       {c.target_phrases.length > 0 && (
         <div className="px-4 py-2 border-t border-white/5">
           <div className="flex flex-wrap gap-1.5 pb-1">
@@ -388,27 +549,21 @@ export default function ConversationExercise({ content, onComplete }: Props) {
         </div>
       )}
 
-      {/* Recording indicator */}
       {isRecording && (
         <div className="px-4 py-2 bg-danger/10 border-t border-danger/20">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-danger animate-pulse" />
-            <span className="text-xs text-danger font-medium">
-              Recording...
-            </span>
+            <span className="text-xs text-danger font-medium">Recording...</span>
           </div>
-          {transcript && (
-            <p className="text-sm text-white/70 mt-1 italic">{transcript}</p>
-          )}
+          {transcript && <p className="text-sm text-white/70 mt-1 italic">{transcript}</p>}
         </div>
       )}
 
-      {/* Input */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           if (isRecording && transcript.trim()) sendTranscript();
-          else if (input.trim() && !loading) sendMessage(input.trim());
+          else if (input.trim() && !loading) void sendMessage(input.trim());
         }}
         className="px-4 py-3 border-t border-white/5 flex gap-2"
       >
@@ -424,7 +579,9 @@ export default function ConversationExercise({ content, onComplete }: Props) {
               <button
                 type="button"
                 onClick={toggleRecording}
-                className="p-3 rounded-xl bg-white/5 hover:bg-white/10 transition"
+                disabled={loading}
+                className="p-3 rounded-xl bg-white/5 hover:bg-white/10 transition disabled:opacity-40"
+                aria-label="Start voice recording"
               >
                 <Mic size={18} />
               </button>
@@ -433,6 +590,7 @@ export default function ConversationExercise({ content, onComplete }: Props) {
               type="submit"
               disabled={!input.trim() || loading}
               className="p-3 bg-accent rounded-xl disabled:opacity-30 hover:bg-accent/80 transition"
+              aria-label="Send message"
             >
               <Send size={18} />
             </button>
@@ -443,17 +601,19 @@ export default function ConversationExercise({ content, onComplete }: Props) {
               type="button"
               onClick={toggleRecording}
               className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition text-white/60"
+              aria-label="Stop recording"
             >
               ✕
             </button>
-            <div className="flex-1 flex items-center justify-center text-sm text-white/40">
-              {transcript ? transcript.slice(-50) : "Parla..."}
+            <div className="flex-1 flex items-center justify-center text-sm text-white/40 px-2 truncate">
+              {transcript ? transcript.slice(-80) : "Parla..."}
             </div>
             <button
               type="button"
               onClick={sendTranscript}
-              disabled={!transcript.trim()}
+              disabled={!transcript.trim() || loading}
               className="p-3 bg-accent rounded-xl disabled:opacity-30 hover:bg-accent/80 transition"
+              aria-label="Send recorded message"
             >
               <Send size={18} />
             </button>
@@ -461,7 +621,10 @@ export default function ConversationExercise({ content, onComplete }: Props) {
         )}
       </form>
 
-      {/* End conversation button */}
+      {audioPending && (
+        <div className="px-4 pb-1 text-[11px] text-teal-300/70">Playing audio...</div>
+      )}
+
       {messages.length >= 4 && (
         <div className="px-4 pb-3">
           <button

@@ -24,15 +24,19 @@ export default function Home() {
   const weekMission = useMemo(() => getWeeklyMission(today), [today]);
   const weekWindow = useMemo(() => getWeekWindow(today), [today]);
 
-  // Count exercises per type
+  // Count exercises per type — include due SRS cards in Bronze count
   const exerciseCounts = useMemo(() => {
     if (!todayExercises) return {};
     const counts: Record<string, number> = {};
     for (const ex of todayExercises) {
       counts[ex.type] = (counts[ex.type] ?? 0) + 1;
     }
+    // Bronze = SRS: include due cards even if no SRS exercises were generated
+    if (dueCards && dueCards.length > 0) {
+      counts["srs"] = Math.max(counts["srs"] ?? 0, dueCards.length);
+    }
     return counts;
-  }, [todayExercises]);
+  }, [todayExercises, dueCards]);
 
   const totalExercises = todayExercises?.length ?? 0;
   const hasDueCards = dueCards && dueCards.length > 0;
@@ -49,6 +53,14 @@ export default function Home() {
   }, [recentSessions, weekWindow.monday, weekWindow.sunday]);
 
   const handleModeSelect = (mode: ExerciseMode) => {
+    // Bronze with no SRS exercises but due cards → go to SRS practice
+    if (mode === "quick") {
+      const srsExercises = todayExercises?.filter((e) => e.type === "srs").length ?? 0;
+      if (srsExercises === 0 && dueCards && dueCards.length > 0) {
+        router.push(`/practice?embedded=1&date=${today}`);
+        return;
+      }
+    }
     router.push(`/session/${today}?mode=${mode}`);
   };
 

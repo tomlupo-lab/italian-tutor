@@ -263,7 +263,7 @@ export function useExerciseSession({
   const currentExercise = exercises[current] ?? null;
   const progress = total > 0 ? (current / total) * 100 : 0;
 
-  /** Errors extracted from exercise results */
+  /** Errors extracted from exercise results — all drill types */
   const sessionErrors = useMemo(() => {
     const errors: Array<{
       original: string;
@@ -275,14 +275,101 @@ export function useExerciseSession({
     for (const [id, result] of results) {
       const ex = exercises.find((e) => e._id === id);
       if (!ex) continue;
-      // Extract errors from conversation results
-      if (
-        ex.type === "conversation" &&
-        "errors" in result &&
-        Array.isArray((result as { errors: unknown[] }).errors)
-      ) {
-        for (const err of (result as { errors: Array<{ original: string; corrected: string; explanation?: string }> }).errors) {
-          errors.push({ ...err, skillId: ex.skillId });
+      const content = normalizeContent(ex.type, ex.content);
+
+      switch (ex.type) {
+        case "cloze": {
+          const c = content as ClozeContent;
+          const r = result as { selected: number; correct: boolean };
+          if (!r.correct && c.sentence) {
+            errors.push({
+              original: c.options[r.selected],
+              corrected: c.options[c.correct],
+              explanation: c.hint,
+              category: "cloze",
+              skillId: ex.skillId,
+            });
+          }
+          break;
+        }
+        case "word_builder": {
+          const c = content as WordBuilderContent;
+          const r = result as WordBuilderResult;
+          if (!r.correct && c.target_sentence) {
+            errors.push({
+              original: "wrong order",
+              corrected: c.target_sentence,
+              explanation: c.translation,
+              category: "word_order",
+              skillId: ex.skillId,
+            });
+          }
+          break;
+        }
+        case "pattern_drill": {
+          const c = content as PatternDrillContent;
+          const r = result as PatternDrillResult;
+          if (c?.sentences && r?.scores) {
+            r.scores.forEach((correct, i) => {
+              if (!correct && c.sentences[i]) {
+                const s = c.sentences[i];
+                errors.push({
+                  original: s.blank || "wrong",
+                  corrected: s.correct,
+                  explanation: s.hint || c.pattern_name,
+                  category: "grammar_pattern",
+                  skillId: ex.skillId,
+                });
+              }
+            });
+          }
+          break;
+        }
+        case "speed_translation": {
+          const c = content as SpeedTranslationContent;
+          const r = result as SpeedTranslationResult;
+          if (c?.sentences && r?.scores) {
+            r.scores.forEach((correct, i) => {
+              if (!correct && c.sentences[i]) {
+                const s = c.sentences[i];
+                errors.push({
+                  original: s.source,
+                  corrected: s.options[s.correct],
+                  category: "translation",
+                  skillId: ex.skillId,
+                });
+              }
+            });
+          }
+          break;
+        }
+        case "error_hunt": {
+          const c = content as ErrorHuntContent;
+          const r = result as ErrorHuntResult;
+          if (c?.sentences && r?.scores) {
+            r.scores.forEach((correct, i) => {
+              if (!correct && c.sentences[i]?.has_error && c.sentences[i].corrected) {
+                const s = c.sentences[i];
+                errors.push({
+                  original: s.text,
+                  corrected: s.corrected!,
+                  explanation: s.explanation,
+                  category: "error_recognition",
+                  skillId: ex.skillId,
+                });
+              }
+            });
+          }
+          break;
+        }
+        case "conversation": {
+          const convResult = result as { errors?: Array<{ original: string; corrected: string; explanation?: string }> };
+          if (convResult.errors) {
+            for (const err of convResult.errors) {
+              errors.push({ ...err, category: "conversation", skillId: ex.skillId });
+            }
+          }
+          break;
         }
       }
     }

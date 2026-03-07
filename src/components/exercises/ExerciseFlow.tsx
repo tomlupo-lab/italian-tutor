@@ -164,6 +164,7 @@ export default function ExerciseFlow({
               exercisesCompleted={results.size}
               correctCount={correctCount}
               errorsCount={sessionErrors.length}
+              sessionDate={date}
             />
 
             {/* Errors to review */}

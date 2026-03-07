@@ -22,6 +22,7 @@ interface SessionSummaryProps {
   exercisesCompleted: number;
   correctCount: number;
   errorsCount: number;
+  sessionDate?: string;
 }
 
 const MODE_LABELS: Record<string, { label: string; emoji: string }> = {
@@ -86,8 +87,9 @@ export default function SessionSummary({
   exercisesCompleted,
   correctCount,
   errorsCount,
+  sessionDate,
 }: SessionSummaryProps) {
-  const today = getTodayWarsaw();
+  const effectiveDate = sessionDate ?? getTodayWarsaw();
   const milestones = useQuery(api.milestones.getAll) as Milestone[] | undefined;
   const allCards = useQuery(api.cards.getAll) as AnyCard[] | undefined;
   const recentSessions = useQuery(api.sessions.listRecent, { limit: 30 }) as
@@ -160,13 +162,13 @@ export default function SessionSummary({
   const latestMissionOutcome = useMemo(() => {
     if (!recentSessions) return null;
     const candidates = recentSessions.filter(
-      (s) => s.type === "lesson" && s.date === today && s.mode === mode,
+      (s) => s.type === "lesson" && s.date === effectiveDate && s.mode === mode,
     );
     if (candidates.length === 0) return null;
     return candidates.reduce((latest, row) =>
       (row._creationTime ?? 0) > (latest._creationTime ?? 0) ? row : latest,
     );
-  }, [mode, recentSessions, today]);
+  }, [effectiveDate, mode, recentSessions]);
 
   // ── Session score ─────────────────────────────────────────────────
   const accuracy = exercisesCompleted > 0 ? Math.round((correctCount / exercisesCompleted) * 100) : 0;

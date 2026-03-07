@@ -591,17 +591,20 @@ export function useExerciseSession({
             }
           }
 
-          // Extract correction cards from wrong answers and add to SRS deck
-          const correctionCards = extractCorrectionCards(exercises, allResults);
-          if (correctionCards.length > 0) {
-            bulkAddCards({ cards: correctionCards })
-              .then(() => {
-                // Enrich card explanations with AI (fire and forget)
-                enrichCorrectionCards(correctionCards, updateCardExplanation);
-              })
-              .catch(() => {
-                // Non-critical — cards can be generated again
-              });
+          if (saveResult.status === "created") {
+            // Extract correction cards from wrong answers and add to SRS deck.
+            // Skip on duplicate save retries to avoid duplicate correction cards.
+            const correctionCards = extractCorrectionCards(exercises, allResults);
+            if (correctionCards.length > 0) {
+              bulkAddCards({ cards: correctionCards })
+                .then(() => {
+                  // Enrich card explanations with AI (fire and forget)
+                  enrichCorrectionCards(correctionCards, updateCardExplanation);
+                })
+                .catch(() => {
+                  // Non-critical — cards can be generated again
+                });
+            }
           }
 
           setError(null);

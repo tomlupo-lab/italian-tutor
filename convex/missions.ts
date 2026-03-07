@@ -493,13 +493,15 @@ export const recordLessonCompletion = mutation({
           )
         : [...currentSignatures, { date: args.sessionDate, signature, count: 1 }];
 
+    const nextCriticalErrors = criticalErrors;
+
     const missionCompleted =
       nextCredits.bronze >= mission.exerciseTargets.bronzeReviews &&
       nextCredits.silver >= mission.exerciseTargets.silverDrills &&
       nextCredits.gold >= mission.exerciseTargets.goldConversations &&
       checkpointsDone &&
       nextAverage >= mission.passPolicy.minCompositeScore &&
-      (!mission.passPolicy.requireCriticalErrorsZero || (missionProgress.criticalErrorsCount ?? 0) + criticalErrors === 0);
+      (!mission.passPolicy.requireCriticalErrorsZero || nextCriticalErrors === 0);
 
     await ctx.db.patch(missionProgress._id, {
       status: missionCompleted ? "completed" : "active",
@@ -510,7 +512,7 @@ export const recordLessonCompletion = mutation({
       sessionsCompleted: nextSessions,
       totalScore: nextTotalScore,
       averageScore: nextAverage,
-      criticalErrorsCount: (missionProgress.criticalErrorsCount ?? 0) + criticalErrors,
+      criticalErrorsCount: nextCriticalErrors,
       skillPoints: mergedSkillPairs,
       errorCounts: mergedErrorPairs,
       completedCheckpointIds: nextCompletedCheckpointIds,

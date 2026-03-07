@@ -1,4 +1,4 @@
-const CACHE_NAME = "marco-v11";
+const CACHE_NAME = "marco-v12";
 const TTS_CACHE = "marco-tts-v1";
 const BASE_PATH = "/tutor";
 

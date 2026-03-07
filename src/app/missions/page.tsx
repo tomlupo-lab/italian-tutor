@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { CheckCircle2, Flag, Lock, Loader2, PlayCircle, Target } from "lucide-react";
@@ -71,6 +71,7 @@ interface RoadmapRule {
 export default function MissionsPage() {
   const [workingMissionId, setWorkingMissionId] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
+  const [selectedLevel, setSelectedLevel] = useState<Level>("A1");
 
   const catalog = useQuery(api.missions.listCatalog, {}) as { missions: CatalogMission[] } | undefined;
   const learner = useQuery(api.missions.getLearnerProgress, {}) as
@@ -152,6 +153,12 @@ export default function MissionsPage() {
     return "standard";
   }, [activeMission, activeMissionCatalog]);
 
+  useEffect(() => {
+    if (!unlocked.has(selectedLevel)) {
+      setSelectedLevel(currentLevel);
+    }
+  }, [currentLevel, selectedLevel, unlocked]);
+
   const handleSeed = async () => {
     setSeeding(true);
     try {
@@ -229,6 +236,27 @@ export default function MissionsPage() {
             ))}
           </div>
         )}
+        {hasCatalog && (
+          <div className="grid grid-cols-4 gap-2 pt-1 border-t border-white/10">
+            {LEVELS.map((level) => (
+              <button
+                key={level}
+                onClick={() => unlocked.has(level) && setSelectedLevel(level)}
+                disabled={!unlocked.has(level)}
+                className={cn(
+                  "rounded-lg border px-2 py-1.5 text-center text-xs transition",
+                  selectedLevel === level
+                    ? "border-accent/40 bg-accent/20 text-accent-light"
+                    : unlocked.has(level)
+                      ? "border-white/15 bg-white/5 text-white/70 hover:border-white/25"
+                      : "border-white/10 bg-white/0 text-white/30 cursor-not-allowed",
+                )}
+              >
+                {level}
+              </button>
+            ))}
+          </div>
+        )}
         {activeMissionCatalog && (
           <div className="pt-2 border-t border-white/10 space-y-2">
             <p className="text-xs text-white/60">
@@ -288,14 +316,14 @@ export default function MissionsPage() {
         </section>
       )}
 
-      {LEVELS.map((level) => {
+      {(() => {
+        const level = selectedLevel;
         const levelMissions = missionsByLevel[level];
         if (!levelMissions.length) return null;
-
         const isUnlocked = unlocked.has(level);
 
         return (
-          <section key={level} className="space-y-2">
+          <section className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <h2 className="text-sm font-semibold">{level} Missions</h2>
               {!isUnlocked && (
@@ -381,7 +409,7 @@ export default function MissionsPage() {
             </div>
           </section>
         );
-      })}
+      })()}
     </main>
   );
 }

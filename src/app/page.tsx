@@ -280,10 +280,13 @@ export default function Home() {
 
       {/* Mode selector or fallback */}
       {totalExercises > 0 ? (
-        <ModeSelector
-          exerciseCounts={exerciseCounts}
-          onSelect={handleModeSelect}
-        />
+        <section className="space-y-2">
+          <p className="text-[11px] text-white/35 uppercase tracking-wider px-1">Choose Today&apos;s Tier</p>
+          <ModeSelector
+            exerciseCounts={exerciseCounts}
+            onSelect={handleModeSelect}
+          />
+        </section>
       ) : (
         <div className="bg-card rounded-2xl border border-white/10 p-6 text-center space-y-2">
           <p className="text-white/50">Exercises are generated Sunday night</p>

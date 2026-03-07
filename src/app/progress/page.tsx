@@ -200,7 +200,13 @@ export default function ProgressPage() {
             {(activeProgress.criticalErrorsCount ?? 0) > 0 ? ` · ${activeProgress.criticalErrorsCount} critical blockers` : ""}
           </p>
         )}
+        <div className="pt-2 border-t border-white/10 flex items-center gap-3">
+          <Link href="/missions" className="text-[11px] text-accent-light">Open mission hub</Link>
+          <Link href="/exercises?focus=recovery" className="text-[11px] text-warn">Run recovery drills</Link>
+        </div>
       </div>
+
+      <p className="text-[11px] text-white/35 uppercase tracking-wider px-1">Learning Activity</p>
 
       {/* 7-Day Comparison */}
       {wc && (
@@ -362,8 +368,16 @@ export default function ProgressPage() {
               </div>
             ))}
           </div>
+          <Link
+            href="/exercises?focus=recovery"
+            className="inline-block text-[11px] text-warn"
+          >
+            Start a focused recovery set
+          </Link>
         </div>
       )}
+
+      <p className="text-[11px] text-white/35 uppercase tracking-wider px-1">Skills Map</p>
 
       {/* B2 Activation */}
       {b2 && (
@@ -427,52 +441,55 @@ export default function ProgressPage() {
 
       {/* Full Skill Breakdown by Level */}
       {Object.entries(groupedByLevel).length > 0 && (
-        <>
-          <h2 className="text-sm font-medium text-white/40 mt-2">All Skills</h2>
-          {["A1", "A2", "B1", "B2"].map((level) => {
-            const skills = groupedByLevel[level];
-            if (!skills?.length) return null;
-            const levelData = analytics.levels[level];
-            return (
-              <div key={level} className="bg-card rounded-2xl border border-white/10 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={cn("w-2 h-2 rounded-full", LEVEL_COLORS[level] ?? "bg-white/20")} />
-                    <h3 className="text-sm font-medium">{level}</h3>
-                    <span className="text-[10px] text-white/30">{skills.length} skills</span>
+        <details className="bg-card rounded-2xl border border-white/10 p-4 space-y-3">
+          <summary className="text-sm font-medium cursor-pointer text-white/70">
+            Full Skill Breakdown
+          </summary>
+          <div className="pt-2 space-y-3">
+            {["A1", "A2", "B1", "B2"].map((level) => {
+              const skills = groupedByLevel[level];
+              if (!skills?.length) return null;
+              const levelData = analytics.levels[level];
+              return (
+                <div key={level} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={cn("w-2 h-2 rounded-full", LEVEL_COLORS[level] ?? "bg-white/20")} />
+                      <h3 className="text-sm font-medium">{level}</h3>
+                      <span className="text-[10px] text-white/30">{skills.length} skills</span>
+                    </div>
+                    {levelData && (
+                      <span className="text-[10px] text-white/30">
+                        {levelData.masteredPct}% mastered
+                      </span>
+                    )}
                   </div>
                   {levelData && (
-                    <span className="text-[10px] text-white/30">
-                      {levelData.masteredPct}% mastered
-                    </span>
+                    <div className="flex gap-1">
+                      {levelData.distribution.map((count, i) => (
+                        <div key={i} className="flex-1 text-center">
+                          <div
+                            className={cn(
+                              "h-1 rounded-full mx-0.5",
+                              i === 0 ? "bg-white/10" : i === 1 ? "bg-warn" : i === 2 ? "bg-yellow-400" : i === 3 ? "bg-accent" : "bg-success",
+                            )}
+                            style={{ opacity: count > 0 ? 1 : 0.2 }}
+                          />
+                          <span className="text-[8px] text-white/20">{count}</span>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                </div>
-                {/* Distribution chips */}
-                {levelData && (
-                  <div className="flex gap-1">
-                    {levelData.distribution.map((count, i) => (
-                      <div key={i} className="flex-1 text-center">
-                        <div
-                          className={cn(
-                            "h-1 rounded-full mx-0.5",
-                            i === 0 ? "bg-white/10" : i === 1 ? "bg-warn" : i === 2 ? "bg-yellow-400" : i === 3 ? "bg-accent" : "bg-success",
-                          )}
-                          style={{ opacity: count > 0 ? 1 : 0.2 }}
-                        />
-                        <span className="text-[8px] text-white/20">{count}</span>
-                      </div>
+                  <div className="space-y-1.5">
+                    {skills.map((skill: { skillId: string; name: string; rating: number; level: string }) => (
+                      <MilestoneBar key={skill.skillId} name={skill.name} rating={skill.rating} level={skill.level} />
                     ))}
                   </div>
-                )}
-                <div className="space-y-1.5">
-                  {skills.map((skill: { skillId: string; name: string; rating: number; level: string }) => (
-                    <MilestoneBar key={skill.skillId} name={skill.name} rating={skill.rating} level={skill.level} />
-                  ))}
                 </div>
-              </div>
-            );
-          })}
-        </>
+              );
+            })}
+          </div>
+        </details>
       )}
     </main>
   );

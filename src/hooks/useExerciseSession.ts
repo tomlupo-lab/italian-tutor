@@ -557,28 +557,28 @@ export function useExerciseSession({
           const criticalErrors = ["off_topic", "incomplete_response", "dosage_misunderstood", "negation_reversal", "instruction_misread"]
             .reduce((sum, key) => sum + (errorMap.get(key) ?? 0), 0);
 
-          try {
-            const sessionSignature = buildSessionSignature(exercises, mode);
-            const missionResult = await recordMissionCompletion({
-              sessionDate,
-              scorePercent: Math.round(pct * 100),
-              bronzeCredit,
-              silverCredit,
-              goldCredit,
-              minutes: totalMinutes,
-              sessionSignature,
-              criticalErrors,
-              confidenceWeight: Math.min(1, Math.max(0.25, allResults.size / 20)),
-              skillDeltas: Array.from(skillMap.entries()).map(([skillKey, points]) => ({
-                skillKey,
-                points,
-              })),
-              errorDeltas: Array.from(errorMap.entries()).map(([errorKey, count]) => ({
-                errorKey,
-                count,
-              })),
-            });
-            if ("id" in saveResult && saveResult.id) {
+          if (saveResult.status === "created" && "id" in saveResult && saveResult.id) {
+            try {
+              const sessionSignature = buildSessionSignature(exercises, mode);
+              const missionResult = await recordMissionCompletion({
+                sessionDate,
+                scorePercent: Math.round(pct * 100),
+                bronzeCredit,
+                silverCredit,
+                goldCredit,
+                minutes: totalMinutes,
+                sessionSignature,
+                criticalErrors,
+                confidenceWeight: Math.min(1, Math.max(0.25, allResults.size / 20)),
+                skillDeltas: Array.from(skillMap.entries()).map(([skillKey, points]) => ({
+                  skillKey,
+                  points,
+                })),
+                errorDeltas: Array.from(errorMap.entries()).map(([errorKey, count]) => ({
+                  errorKey,
+                  count,
+                })),
+              });
               await attachMissionOutcome({
                 sessionId: saveResult.id,
                 missionId: missionResult.missionId,
@@ -586,9 +586,9 @@ export function useExerciseSession({
                 duplicatePenaltyApplied: missionResult.duplicateSameDay,
                 appliedCredits: missionResult.appliedCredits,
               });
+            } catch {
+              // non-critical
             }
-          } catch {
-            // non-critical
           }
 
           // Extract correction cards from wrong answers and add to SRS deck

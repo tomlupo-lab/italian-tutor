@@ -70,6 +70,17 @@ interface ActiveMission {
   title: string;
 }
 
+interface RecentSessionOutcome {
+  date: string;
+  type: "lesson" | "quick_practice" | "free_talk" | "speaking_practice";
+  mode?: string;
+  missionId?: string;
+  checkpointAwardedId?: string;
+  duplicatePenaltyApplied?: boolean;
+  appliedCredits?: { bronze: number; silver: number; gold: number };
+  _creationTime?: number;
+}
+
 export default function SessionSummary({
   mode,
   exercisesCompleted,
@@ -79,7 +90,9 @@ export default function SessionSummary({
   const today = getTodayWarsaw();
   const milestones = useQuery(api.milestones.getAll) as Milestone[] | undefined;
   const allCards = useQuery(api.cards.getAll) as AnyCard[] | undefined;
-  const recentSessions = useQuery(api.sessions.listRecent, { limit: 30 });
+  const recentSessions = useQuery(api.sessions.listRecent, { limit: 30 }) as
+    | RecentSessionOutcome[]
+    | undefined;
   const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMission | null | undefined;
   const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
     | { missions: LearnerMission[]; level?: LearnerLevel | null }
@@ -143,6 +156,17 @@ export default function SessionSummary({
       prevSessions: prevCount,
     };
   }, [recentSessions]);
+
+  const latestMissionOutcome = useMemo(() => {
+    if (!recentSessions) return null;
+    const candidates = recentSessions.filter(
+      (s) => s.type === "lesson" && s.date === today && s.mode === mode,
+    );
+    if (candidates.length === 0) return null;
+    return candidates.reduce((latest, row) =>
+      (row._creationTime ?? 0) > (latest._creationTime ?? 0) ? row : latest,
+    );
+  }, [mode, recentSessions, today]);
 
   // ── Session score ─────────────────────────────────────────────────
   const accuracy = exercisesCompleted > 0 ? Math.round((correctCount / exercisesCompleted) * 100) : 0;
@@ -267,6 +291,34 @@ export default function SessionSummary({
                 />
               </div>
             </>
+          )}
+          {latestMissionOutcome && (
+            <div className="pt-2 border-t border-white/10 space-y-1">
+              {latestMissionOutcome.checkpointAwardedId && (
+                <p className="text-[11px] text-success">Checkpoint earned in this session</p>
+              )}
+              {latestMissionOutcome.duplicatePenaltyApplied && (
+                <p className="text-[11px] text-warn">
+                  Repeat pattern detected today: reduced mission credits applied
+                </p>
+              )}
+              {latestMissionOutcome.appliedCredits && (
+                <p className="text-[11px] text-white/45">
+                  Credits applied: Bronze {latestMissionOutcome.appliedCredits.bronze} · Silver{" "}
+                  {latestMissionOutcome.appliedCredits.silver} · Gold{" "}
+                  {latestMissionOutcome.appliedCredits.gold}
+                </p>
+              )}
+              {latestMissionOutcome.appliedCredits &&
+                latestMissionOutcome.appliedCredits.bronze +
+                  latestMissionOutcome.appliedCredits.silver +
+                  latestMissionOutcome.appliedCredits.gold ===
+                  0 && (
+                  <p className="text-[11px] text-warn">
+                    No mission credits from this run. Improve score or use a different session pattern.
+                  </p>
+                )}
+            </div>
           )}
         </div>
       )}

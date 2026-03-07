@@ -12,7 +12,7 @@ const items = [
   { href: "/progress", label: "Progress", icon: BarChart3 },
 ];
 
-export const NAV_SPACER_CLASS = "h-16";
+export const NAV_SPACER_CLASS = "h-20";
 
 export default function BottomNav() {
   const pathname = usePathname();

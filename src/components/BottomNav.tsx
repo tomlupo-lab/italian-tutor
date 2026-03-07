@@ -34,7 +34,7 @@ export default function BottomNav() {
               href={item.href}
               aria-label={item.label}
               className={cn(
-                "flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition",
+                "flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition [-webkit-tap-highlight-color:transparent]",
                 active ? "text-accent-light" : "text-white/40 hover:text-white/60"
               )}
             >

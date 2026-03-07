@@ -27,6 +27,7 @@ const DRILL_TYPES: { type: string; label: string; emoji: string }[] = [
 export default function ExercisesPage() {
   const [mode, setMode] = useState<PracticeMode | null>(null);
   const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [recoveryFocus, setRecoveryFocus] = useState(false);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [current, setCurrent] = useState(0);
   const [results, setResults] = useState<Map<string, ExerciseResult>>(new Map());
@@ -222,6 +223,7 @@ export default function ExercisesPage() {
     if (mode || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("focus") === "recovery") {
+      setRecoveryFocus(true);
       startPractice("errors");
     }
   }, [mode, startPractice]);
@@ -234,6 +236,20 @@ export default function ExercisesPage() {
         <p className="text-xs text-white/30 text-center">
           Practice exercises on demand
         </p>
+
+        {(recoveryFocus || recentErrors.length > 0) && (
+          <div className="rounded-2xl border border-warn/30 bg-warn/10 p-4 space-y-1">
+            <p className="text-[11px] text-warn uppercase tracking-wider">Recovery Focus</p>
+            <p className="text-sm font-medium">
+              {recentErrors.length > 0
+                ? `Marco detected ${recentErrors.length} recent errors to target`
+                : "Run a focused recovery set"}
+            </p>
+            <p className="text-xs text-white/50">
+              Start with Error Drills first, then switch to Random Mix.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-3 pt-2">
           {/* Error drills */}

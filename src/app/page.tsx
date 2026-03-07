@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import Link from "next/link";
-import { Flame, Trophy, Zap, BarChart3, Loader2, Flag } from "lucide-react";
+import { Flame, Trophy, Zap, Loader2, Flag } from "lucide-react";
 import { getTodayWarsaw } from "../lib/date";
 import ModeSelector from "../components/ModeSelector";
 import SkillsWidget from "../components/SkillsWidget";
@@ -92,6 +92,13 @@ export default function Home() {
       blocker: (active.criticalErrorsCount ?? 0) > 0,
     };
   }, [learnerProgress?.missions, catalog?.missions]);
+
+  const missionStatus = useMemo(() => {
+    if (!activeProgress) return "none" as const;
+    if (activeProgress.blocker) return "blocked" as const;
+    if (activeProgress.active.status === "completed") return "completed" as const;
+    return "in_progress" as const;
+  }, [activeProgress]);
 
   const handleModeSelect = (mode: ExerciseMode) => {
     // Bronze with no SRS exercises but due cards → go to SRS practice
@@ -200,9 +207,20 @@ export default function Home() {
         </h1>
       </div>
 
-      {/* Continuous mission loop */}
+      {/* Mission Hero */}
       <div className="bg-card rounded-2xl border border-white/10 p-4 space-y-2">
-        <p className="text-[11px] text-accent-light uppercase tracking-wider">Continuous Mission</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] text-accent-light uppercase tracking-wider">Mission</p>
+          {missionStatus === "blocked" ? (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-warn/20 text-warn">Blocked</span>
+          ) : missionStatus === "completed" ? (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/20 text-success">Completed</span>
+          ) : missionStatus === "in_progress" ? (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/20 text-accent-light">In progress</span>
+          ) : (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/50">None</span>
+          )}
+        </div>
         <h2 className="text-base font-semibold">
           {activeProgress?.mission?.title ?? "No active mission selected"}
         </h2>
@@ -210,36 +228,20 @@ export default function Home() {
           {activeMission?.summary ??
             "Marco continuously adapts drills and conversations from your errors, score trends, and current mission goals."}
         </p>
-        {activeProgress?.mission && (
-          <p className="text-[11px] text-white/45">
-            Focus now:{" "}
-            {activeProgress.recommendedMode === "deep"
-              ? "Gold conversations"
-              : activeProgress.recommendedMode === "standard"
-                ? "Silver drills"
-                : "Bronze SRS"}
-          </p>
-        )}
-        <div className="pt-2 border-t border-white/10">
-          <Link href="/missions" className="text-xs text-accent-light inline-flex items-center gap-1.5">
-            <Flag size={12} />
-            {activeMission?.title
-              ? `Active campaign mission: ${activeMission.title}`
-              : "Open Mission Hub"}
-          </Link>
-        </div>
-      </div>
-
-      {/* Primary campaign CTA */}
-      <div className="bg-card rounded-2xl border border-accent/20 p-4 space-y-2">
-        <p className="text-[11px] text-accent-light uppercase tracking-wider">Next Action</p>
         {activeProgress?.mission ? (
           <>
-            <p className="text-sm font-semibold">{activeProgress.mission.title}</p>
             <p className="text-xs text-white/45">
               Bronze {activeProgress.active.credits?.bronze ?? 0}/{activeProgress.mission.exerciseTargets.bronzeReviews} ·
               Silver {activeProgress.active.credits?.silver ?? 0}/{activeProgress.mission.exerciseTargets.silverDrills} ·
               Gold {activeProgress.active.credits?.gold ?? 0}/{activeProgress.mission.exerciseTargets.goldConversations}
+            </p>
+            <p className="text-[11px] text-white/45">
+              Focus now:{" "}
+              {activeProgress.recommendedMode === "deep"
+                ? "Gold conversations"
+                : activeProgress.recommendedMode === "standard"
+                  ? "Silver drills"
+                  : "Bronze SRS"}
             </p>
             {activeProgress.blocker ? (
               <Link
@@ -259,7 +261,7 @@ export default function Home() {
           </>
         ) : (
           <>
-            <p className="text-sm font-semibold">No active mission</p>
+            <p className="text-sm font-semibold">Open Missions to start your campaign</p>
             <Link
               href="/missions"
               className="inline-block px-4 py-2 rounded-xl text-sm font-medium bg-accent/20 text-accent-light border border-accent/30"
@@ -268,6 +270,12 @@ export default function Home() {
             </Link>
           </>
         )}
+        <div className="pt-2 border-t border-white/10">
+          <Link href="/missions" className="text-xs text-accent-light inline-flex items-center gap-1.5">
+            <Flag size={12} />
+            Manage missions and unlocks
+          </Link>
+        </div>
       </div>
 
       {/* Mode selector or fallback */}
@@ -295,39 +303,6 @@ export default function Home() {
 
       {/* Skills Progress Widget */}
       <SkillsWidget />
-
-      {/* Quick links */}
-      <div className="grid grid-cols-3 gap-3">
-        <Link href="/practice">
-          <div className="bg-card rounded-xl border border-white/10 p-4 hover:border-white/20 transition">
-            <Zap size={20} className="text-yellow-400 mb-2" />
-            <h3 className="text-sm font-medium">Practice</h3>
-            <p className="text-xs text-white/40 mt-0.5">
-              {hasDueCards
-                ? `${dueCards.length} cards due`
-                : "Flashcards"}
-            </p>
-          </div>
-        </Link>
-        <Link href="/progress">
-          <div className="bg-card rounded-xl border border-white/10 p-4 hover:border-white/20 transition">
-            <BarChart3 size={20} className="text-accent-light mb-2" />
-            <h3 className="text-sm font-medium">Progress</h3>
-            <p className="text-xs text-white/40 mt-0.5">
-              {stats ? `${stats.totalSessions} sessions` : "View stats"}
-            </p>
-          </div>
-        </Link>
-        <Link href="/missions">
-          <div className="bg-card rounded-xl border border-white/10 p-4 hover:border-white/20 transition">
-            <Flag size={20} className="text-accent-light mb-2" />
-            <h3 className="text-sm font-medium">Missions</h3>
-            <p className="text-xs text-white/40 mt-0.5">
-              Campaign hub
-            </p>
-          </div>
-        </Link>
-      </div>
     </main>
   );
 }

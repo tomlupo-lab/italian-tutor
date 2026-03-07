@@ -11,6 +11,12 @@ type Level = "A1" | "A2" | "B1" | "B2";
 const LEVELS: Level[] = ["A1", "A2", "B1", "B2"];
 type MissionStatus = "not_started" | "active" | "paused" | "completed";
 
+function prettySkill(skillKey: string): string {
+  return skillKey
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 interface CatalogMission {
   missionId: string;
   level: Level;
@@ -253,7 +259,7 @@ export default function MissionsPage() {
 
       {unlockChecklist && (
         <section className="bg-card rounded-2xl border border-white/10 p-4 space-y-2">
-          <h2 className="text-sm font-semibold">Unlock Checklist ({currentLevel})</h2>
+          <h2 className="text-sm font-semibold">Unlock Next Level ({currentLevel})</h2>
           <p className="text-xs text-white/45">
             Required missions: {unlockChecklist.requiredDone}/{unlockChecklist.requiredTotal}
           </p>
@@ -272,10 +278,13 @@ export default function MissionsPage() {
           <div className="pt-1 border-t border-white/10 space-y-1">
             {unlockChecklist.skillChecks.slice(0, 6).map((skill) => (
               <p key={skill.skillKey} className="text-[11px] text-white/45">
-                {skill.skillKey}: {skill.current}/{skill.minPoints}
+                {prettySkill(skill.skillKey)}: {skill.current}/{skill.minPoints}
               </p>
             ))}
           </div>
+          <Link href="/progress" className="inline-block text-[11px] text-accent-light">
+            View full skills and error trends
+          </Link>
         </section>
       )}
 

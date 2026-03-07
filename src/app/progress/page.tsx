@@ -15,6 +15,7 @@ import {
   Target,
   BookOpen,
   BarChart3,
+  Flag,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
@@ -57,6 +58,20 @@ const ERROR_CAT_LABELS: Record<string, string> = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyCard = Record<string, any>;
 
+interface ActiveMissionResult {
+  missionId: string;
+  title: string;
+  summary: string;
+}
+
+interface LearnerMission {
+  missionId: string;
+  active: boolean;
+  criticalErrorsCount?: number;
+  status: "not_started" | "active" | "paused" | "completed";
+  credits: { bronze: number; silver: number; gold: number };
+}
+
 function TrendIcon({ trend }: { trend: string }) {
   if (trend === "up") return <TrendingUp size={14} className="text-success" />;
   if (trend === "down") return <TrendingDown size={14} className="text-warn" />;
@@ -69,6 +84,11 @@ export default function ProgressPage() {
   const recentSessions = useQuery(api.sessions.listRecent, { limit: 200 });
   const milestones = useQuery(api.milestones.getAll);
   const allCards = useQuery(api.cards.getAll) as AnyCard[] | undefined;
+  const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
+  const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
+    | { missions: LearnerMission[] }
+    | undefined;
+  const activeProgress = learnerProgress?.missions?.find((m) => m.active);
 
   // Correction cards — recent mistakes to review
   const corrections = useMemo(() => {
@@ -159,6 +179,27 @@ export default function ProgressPage() {
           <span className="text-[10px] text-white/30 uppercase tracking-wider">Day Streak</span>
           <span className="text-[9px] text-white/20">{stats?.totalSessions ?? 0} sessions total</span>
         </div>
+      </div>
+
+      {/* Campaign status */}
+      <div className="bg-card rounded-2xl border border-white/10 p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <Flag size={14} className="text-accent-light" />
+          <h2 className="text-sm font-medium text-white/60">Campaign Status</h2>
+        </div>
+        <p className="text-sm font-semibold">
+          {activeMission?.title ?? "No active mission"}
+        </p>
+        <p className="text-xs text-white/45">
+          {activeMission?.summary ??
+            "Select a mission to get continuous adaptive progression with clear unlock rules."}
+        </p>
+        {activeProgress && (
+          <p className="text-[11px] text-white/40">
+            Credits: Bronze {activeProgress.credits?.bronze ?? 0} · Silver {activeProgress.credits?.silver ?? 0} · Gold {activeProgress.credits?.gold ?? 0}
+            {(activeProgress.criticalErrorsCount ?? 0) > 0 ? ` · ${activeProgress.criticalErrorsCount} critical blockers` : ""}
+          </p>
+        )}
       </div>
 
       {/* 7-Day Comparison */}

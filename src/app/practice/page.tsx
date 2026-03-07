@@ -350,7 +350,7 @@ export default function PracticePage() {
   // No cards
   if (cards.length === 0) {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center max-w-lg mx-auto pb-4 px-4 gap-4">
+      <main className="min-h-screen flex flex-col items-center justify-center max-w-lg mx-auto pb-20 px-4 gap-4">
         {!embeddedMode && <div className="w-full">{filterBar}</div>}
         <div className="text-5xl mt-4">
           {hasActiveFilters || studyAll ? "🔍" : "🎉"}
@@ -392,7 +392,7 @@ export default function PracticePage() {
   if (done) {
     const avg = reviewed > 0 ? (totalQuality / reviewed).toFixed(1) : "0";
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center max-w-lg mx-auto pb-4 px-4 gap-6">
+      <main className="min-h-screen flex flex-col items-center justify-center max-w-lg mx-auto pb-20 px-4 gap-6">
         <div className="text-5xl">✅</div>
         <h2 className="text-xl font-semibold">Practice Complete!</h2>
         <div className="flex gap-6 text-center">
@@ -421,7 +421,7 @@ export default function PracticePage() {
   const vocabCard = toVocabCard(currentCard);
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center max-w-lg mx-auto pb-4 px-4 gap-4">
+    <main className="min-h-screen flex flex-col items-center justify-center max-w-lg mx-auto pb-20 px-4 gap-4">
       {embeddedMode && (
         <div className="w-full flex items-center justify-between mb-1">
           <Link

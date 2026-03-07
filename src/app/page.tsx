@@ -76,7 +76,7 @@ export default function Home() {
   // First-run welcome screen
   if (isFirstRun) {
     return (
-      <main className="max-w-lg mx-auto pb-4 px-4 py-12 flex flex-col items-center gap-6 text-center">
+      <main className="max-w-lg mx-auto pb-20 px-4 py-12 flex flex-col items-center gap-6 text-center">
         <div className="space-y-2">
           <p className="text-4xl">🇮🇹</p>
           <h1 className="text-2xl font-bold">Ciao! Welcome to Marco</h1>
@@ -125,7 +125,7 @@ export default function Home() {
   }
 
   return (
-    <main className="max-w-lg mx-auto pb-4 px-4 py-4 flex flex-col gap-5">
+    <main className="max-w-lg mx-auto pb-20 px-4 py-4 flex flex-col gap-5">
       {/* Stats bar */}
       {stats && (
         <div className="flex items-center justify-center gap-6 py-1">

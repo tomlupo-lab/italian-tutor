@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-html { background: #1a1a1a; }
+html { background: #0f0f0f; }
 body { font-family: system-ui, -apple-system, sans-serif; }
 
 @layer utilities {

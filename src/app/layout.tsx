@@ -10,7 +10,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#1a1a1a",
+  themeColor: "#0f1117",
   viewportFit: "cover",
 };
 
@@ -32,10 +32,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-bg text-white fixed inset-0 flex flex-col pt-[env(safe-area-inset-top)]">
+      <body className="bg-bg text-white min-h-screen pt-[env(safe-area-inset-top)]">
         <OfflineBanner />
         <ConvexClientProvider>
-          <div className="flex-1 overflow-y-auto overscroll-none">{children}</div>
+          {children}
           <BottomNav />
         </ConvexClientProvider>
         <RegisterSW />

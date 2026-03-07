@@ -136,7 +136,7 @@ export default function ProgressPage() {
   const b2 = analytics.b2Activation;
 
   return (
-    <main className="max-w-lg mx-auto pb-4 px-4 py-4 flex flex-col gap-4">
+    <main className="max-w-lg mx-auto pb-20 px-4 py-4 flex flex-col gap-4">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link href="/" className="p-2 -ml-2 rounded-lg hover:bg-white/5 transition text-white/50 hover:text-white">

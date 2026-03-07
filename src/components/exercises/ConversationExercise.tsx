@@ -10,8 +10,8 @@ import type {
 } from "@/lib/exerciseTypes";
 import { cn } from "@/lib/cn";
 import { apiPath } from "@/lib/paths";
-import { getTodayWarsaw } from "@/lib/date";
-import { getWeeklyMission } from "@/lib/weeklyMission";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { Check, Mic, Send, Square, Volume2 } from "lucide-react";
 
 interface ChatMessage {
@@ -23,6 +23,12 @@ interface ChatMessage {
 interface Props {
   content: unknown;
   onComplete: (result: ExerciseResult) => void;
+}
+
+interface ActiveMissionResult {
+  missionId: string;
+  title: string;
+  summary: string;
 }
 
 function pickRecorderMimeType(): string | undefined {
@@ -38,7 +44,7 @@ function pickRecorderMimeType(): string | undefined {
 
 export default function ConversationExercise({ content, onComplete }: Props) {
   const c = content as ConversationContent;
-  const weeklyMission = getWeeklyMission(getTodayWarsaw());
+  const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -222,7 +228,9 @@ export default function ConversationExercise({ content, onComplete }: Props) {
             messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
             systemPrompt: [
               c.system_prompt,
-              `Weekly mission: ${weeklyMission.title}. ${weeklyMission.immersion} Keep dialogue immersive and move the scenario forward.`,
+              activeMission
+                ? `Active mission: ${activeMission.title}. ${activeMission.summary} Keep dialogue immersive, goal-driven, and corrective.`
+                : "Continuous mission mode: adapt to learner errors and move toward practical task completion.",
             ]
               .filter(Boolean)
               .join("\n\n"),

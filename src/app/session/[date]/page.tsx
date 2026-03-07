@@ -12,13 +12,30 @@ import { MODE_TYPES } from "@/lib/exerciseTypes";
 import ExerciseFlow from "@/components/exercises/ExerciseFlow";
 import ModeSelector from "@/components/ModeSelector";
 import { useState } from "react";
-import { getWeeklyMission } from "@/lib/weeklyMission";
 
 const MODE_LABELS: Record<ExerciseMode, string> = {
   quick: "Bronze",
   standard: "Silver",
   deep: "Gold",
 };
+
+interface ActiveMissionResult {
+  missionId: string;
+  title: string;
+  summary: string;
+}
+
+interface LearnerMission {
+  missionId: string;
+  active: boolean;
+  credits: { bronze: number; silver: number; gold: number };
+  criticalErrorsCount?: number;
+}
+
+interface CatalogMission {
+  missionId: string;
+  exerciseTargets: { bronzeReviews: number; silverDrills: number; goldConversations: number };
+}
 
 export default function SessionPage() {
   const router = useRouter();
@@ -33,7 +50,13 @@ export default function SessionPage() {
 
   const allExercises = useQuery(api.exercises.getByDate, { date: dateParam });
   const dueCards = useQuery(api.cards.getDue, { limit: 200 });
-  const weekMission = useMemo(() => getWeeklyMission(dateParam), [dateParam]);
+  const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
+  const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
+    | { missions: LearnerMission[] }
+    | undefined;
+  const catalog = useQuery(api.missions.listCatalog, {}) as
+    | { missions: CatalogMission[] }
+    | undefined;
 
   const inferredTopicTag = useMemo(() => {
     if (!allExercises || allExercises.length === 0) return "";
@@ -114,6 +137,19 @@ export default function SessionPage() {
       .sort((a, b) => a.order - b.order);
   }, [allExercises, selectedMode]);
 
+  const activeProgress = useMemo(() => {
+    const active = learnerProgress?.missions?.find((m) => m.active);
+    if (!active) return null;
+    const mission = catalog?.missions?.find((m) => m.missionId === active.missionId);
+    if (!mission) return null;
+    return {
+      bronze: `${active.credits?.bronze ?? 0}/${mission.exerciseTargets.bronzeReviews}`,
+      silver: `${active.credits?.silver ?? 0}/${mission.exerciseTargets.silverDrills}`,
+      gold: `${active.credits?.gold ?? 0}/${mission.exerciseTargets.goldConversations}`,
+      blocker: (active.criticalErrorsCount ?? 0) > 0,
+    };
+  }, [learnerProgress?.missions, catalog?.missions]);
+
   // Loading
   if (allExercises === undefined) {
     return (
@@ -171,13 +207,18 @@ export default function SessionPage() {
 
       <div className="px-4 pt-3">
         <div className="rounded-xl border border-white/10 bg-card/40 p-3">
-          <p className="text-[10px] text-accent-light uppercase tracking-wider">
-            {weekMission.weekId} Mission
-          </p>
-          <p className="text-sm font-medium mt-0.5">{weekMission.title}</p>
+          <p className="text-[10px] text-accent-light uppercase tracking-wider">Active Mission</p>
+          <p className="text-sm font-medium mt-0.5">{activeMission?.title ?? "No mission selected"}</p>
           <p className="text-xs text-white/45 mt-1">
-            {selectedMode ? weekMission.acts[selectedMode] : weekMission.problem}
+            {activeMission?.summary ??
+              "Use this session to push mission progress. Marco will adapt future content from your results and errors."}
           </p>
+          {activeProgress && (
+            <p className="text-[11px] text-white/40 mt-2">
+              Bronze {activeProgress.bronze} · Silver {activeProgress.silver} · Gold {activeProgress.gold}
+              {activeProgress.blocker ? " · Recovery recommended" : ""}
+            </p>
+          )}
         </div>
       </div>
 

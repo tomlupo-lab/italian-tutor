@@ -10,7 +10,6 @@ import ModeSelector from "../components/ModeSelector";
 import SkillsWidget from "../components/SkillsWidget";
 import { useRouter } from "next/navigation";
 import type { ExerciseMode } from "@/lib/exerciseTypes";
-import { getWeekWindow, getWeeklyMission } from "@/lib/weeklyMission";
 
 interface ActiveMissionResult {
   missionId: string;
@@ -46,7 +45,6 @@ export default function Home() {
   const dueCards = useQuery(api.cards.getDue, { limit: 999 });
   const todayExercises = useQuery(api.exercises.getByDate, { date: today });
   const milestones = useQuery(api.milestones.getAll);
-  const recentSessions = useQuery(api.sessions.listRecent, { limit: 120 });
   const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
   const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
     | { missions: LearnerMission[] }
@@ -54,8 +52,6 @@ export default function Home() {
   const catalog = useQuery(api.missions.listCatalog, {}) as
     | { missions: CatalogMission[] }
     | undefined;
-  const weekMission = useMemo(() => getWeeklyMission(today), [today]);
-  const weekWindow = useMemo(() => getWeekWindow(today), [today]);
 
   // Count exercises per type — include due SRS cards in Bronze count
   const exerciseCounts = useMemo(() => {
@@ -78,12 +74,6 @@ export default function Home() {
     milestones !== undefined &&
     stats.totalSessions === 0 &&
     milestones.length === 0;
-  const weeklyMissionSessions = useMemo(() => {
-    if (!recentSessions) return 0;
-    return recentSessions.filter(
-      (s) => s.date >= weekWindow.monday && s.date <= weekWindow.sunday,
-    ).length;
-  }, [recentSessions, weekWindow.monday, weekWindow.sunday]);
 
   const activeProgress = useMemo(() => {
     const active = learnerProgress?.missions?.find((m) => m.active);
@@ -116,7 +106,7 @@ export default function Home() {
   };
 
   // Loading state
-  if (stats === undefined || todayExercises === undefined || recentSessions === undefined) {
+  if (stats === undefined || todayExercises === undefined) {
     return (
       <main className="min-h-screen flex items-center justify-center">
         <Loader2 size={32} className="text-accent animate-spin" />
@@ -210,35 +200,26 @@ export default function Home() {
         </h1>
       </div>
 
-      {/* Weekly immersive mission */}
+      {/* Continuous mission loop */}
       <div className="bg-card rounded-2xl border border-white/10 p-4 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] text-accent-light uppercase tracking-wider">Weekly Mission</p>
-          <p className="text-[10px] text-white/35">{weekMission.weekLabel}</p>
-        </div>
-        <h2 className="text-base font-semibold">{weekMission.title}</h2>
-        <p className="text-xs text-white/50">{weekMission.problem}</p>
-        <p className="text-xs text-white/35">{weekMission.immersion}</p>
-        <div className="pt-1">
-          <div className="flex items-center justify-between text-[11px] text-white/40">
-            <span>Mission progress</span>
-            <span>
-              {Math.min(weeklyMissionSessions, weekMission.objectiveSessions)}/{weekMission.objectiveSessions} sessions
-            </span>
-          </div>
-          <div className="w-full h-1.5 bg-white/5 rounded-full mt-1">
-            <div
-              className="h-full bg-accent rounded-full transition-all"
-              style={{
-                width: `${Math.min(
-                  100,
-                  (weeklyMissionSessions / weekMission.objectiveSessions) * 100,
-                )}%`,
-              }}
-            />
-          </div>
-        </div>
-        <p className="text-[11px] text-white/45">{weekMission.objective}</p>
+        <p className="text-[11px] text-accent-light uppercase tracking-wider">Continuous Mission</p>
+        <h2 className="text-base font-semibold">
+          {activeProgress?.mission?.title ?? "No active mission selected"}
+        </h2>
+        <p className="text-xs text-white/50">
+          {activeMission?.summary ??
+            "Marco continuously adapts drills and conversations from your errors, score trends, and current mission goals."}
+        </p>
+        {activeProgress?.mission && (
+          <p className="text-[11px] text-white/45">
+            Focus now:{" "}
+            {activeProgress.recommendedMode === "deep"
+              ? "Gold conversations"
+              : activeProgress.recommendedMode === "standard"
+                ? "Silver drills"
+                : "Bronze SRS"}
+          </p>
+        )}
         <div className="pt-2 border-t border-white/10">
           <Link href="/missions" className="text-xs text-accent-light inline-flex items-center gap-1.5">
             <Flag size={12} />

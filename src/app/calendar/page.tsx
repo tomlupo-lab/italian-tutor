@@ -133,7 +133,7 @@ export default function CalendarPage() {
   const selectedHasExercises = selectedDate ? exerciseDates.has(selectedDate) : false;
 
   return (
-    <main className="min-h-screen max-w-lg mx-auto pb-24 px-4 py-4 space-y-4">
+    <main className="min-h-screen max-w-lg mx-auto pb-4 px-4 py-4 space-y-4">
       {/* Month nav */}
       <div className="flex items-center justify-between">
         <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-white/5 transition" aria-label="Previous month">

@@ -32,10 +32,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-bg text-white min-h-[100dvh] pt-[env(safe-area-inset-top)]">
+      <body className="bg-bg text-white fixed inset-0 flex flex-col pt-[env(safe-area-inset-top)]">
         <OfflineBanner />
         <ConvexClientProvider>
-          {children}
+          <div className="flex-1 overflow-y-auto overscroll-none">{children}</div>
           <BottomNav />
         </ConvexClientProvider>
         <RegisterSW />

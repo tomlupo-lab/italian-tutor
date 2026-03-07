@@ -25,6 +25,7 @@ export default defineSchema({
   // ── Sessions (enhanced with exercise tracking) ───────────────────
   sessions: defineTable({
     date: v.string(),
+    clientSessionId: v.optional(v.string()),
     duration: v.number(), // seconds
     lessonId: v.optional(v.string()), // backward compatibility with older session docs
     type: v.union(
@@ -55,7 +56,19 @@ export default defineSchema({
     rating: v.optional(v.number()), // 1-5
     reflection: v.optional(v.string()), // "What was hardest?"
     reflectionAnswer: v.optional(v.string()),
-  }).index("by_date", ["date"]),
+    missionId: v.optional(v.string()),
+    checkpointAwardedId: v.optional(v.string()),
+    appliedCredits: v.optional(
+      v.object({
+        bronze: v.number(),
+        silver: v.number(),
+        gold: v.number(),
+      })
+    ),
+    duplicatePenaltyApplied: v.optional(v.boolean()),
+  })
+    .index("by_date", ["date"])
+    .index("by_client_session", ["clientSessionId"]),
 
   // ── SRS Cards (enhanced with skill tracking) ─────────────────────
   cards: defineTable({

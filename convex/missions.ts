@@ -621,3 +621,47 @@ export const recordLessonCompletion = mutation({
     };
   },
 });
+
+export const backfillMissionProgress = mutation({
+  args: {
+    learnerId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const learnerId = args.learnerId ?? "local";
+    const rows = await ctx.db
+      .query("userMissionProgress")
+      .withIndex("by_learner_level", (q) => q.eq("learnerId", learnerId))
+      .collect();
+
+    let patched = 0;
+    for (const row of rows) {
+      const mission = await ctx.db
+        .query("missionCatalog")
+        .withIndex("by_mission_id", (q) => q.eq("missionId", row.missionId))
+        .first();
+      const checkpoints = mission
+        ? mission.checkpoints ?? defaultMissionCheckpoints(mission)
+        : [];
+      const requiredCheckpointIds = checkpoints.filter((cp) => cp.required).map((cp) => cp.id);
+      const existingCheckpointIds = row.completedCheckpointIds ?? [];
+      const mergedCheckpointIds =
+        row.status === "completed"
+          ? Array.from(new Set([...existingCheckpointIds, ...requiredCheckpointIds]))
+          : existingCheckpointIds;
+
+      const needsPatch =
+        row.completedCheckpointIds === undefined ||
+        row.sessionSignatures === undefined ||
+        mergedCheckpointIds.length !== existingCheckpointIds.length;
+
+      if (!needsPatch) continue;
+      await ctx.db.patch(row._id, {
+        completedCheckpointIds: mergedCheckpointIds,
+        sessionSignatures: row.sessionSignatures ?? [],
+      });
+      patched++;
+    }
+
+    return { learnerId, total: rows.length, patched };
+  },
+});

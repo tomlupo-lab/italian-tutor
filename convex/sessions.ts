@@ -10,6 +10,7 @@ function warsawToday(): string {
 export const save = mutation({
   args: {
     date: v.string(),
+    clientSessionId: v.optional(v.string()),
     duration: v.number(),
     type: v.union(
       v.literal("lesson"),
@@ -39,12 +40,11 @@ export const save = mutation({
     reflectionAnswer: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Idempotency: check for existing session with same (date, mode)
-    if (args.mode) {
+    // Idempotency only by explicit clientSessionId.
+    if (args.clientSessionId) {
       const existing = await ctx.db
         .query("sessions")
-        .withIndex("by_date", (q) => q.eq("date", args.date))
-        .filter((q) => q.eq(q.field("mode"), args.mode))
+        .withIndex("by_client_session", (q) => q.eq("clientSessionId", args.clientSessionId))
         .first();
       if (existing) {
         return { status: "duplicate", existingId: existing._id };
@@ -53,6 +53,31 @@ export const save = mutation({
 
     const id = await ctx.db.insert("sessions", args);
     return { status: "created", id };
+  },
+});
+
+export const attachMissionOutcome = mutation({
+  args: {
+    sessionId: v.id("sessions"),
+    missionId: v.string(),
+    checkpointAwardedId: v.optional(v.string()),
+    duplicatePenaltyApplied: v.boolean(),
+    appliedCredits: v.object({
+      bronze: v.number(),
+      silver: v.number(),
+      gold: v.number(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.get(args.sessionId);
+    if (!existing) return { status: "missing" as const };
+    await ctx.db.patch(args.sessionId, {
+      missionId: args.missionId,
+      checkpointAwardedId: args.checkpointAwardedId,
+      duplicatePenaltyApplied: args.duplicatePenaltyApplied,
+      appliedCredits: args.appliedCredits,
+    });
+    return { status: "updated" as const };
   },
 });
 

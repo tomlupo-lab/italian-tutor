@@ -24,6 +24,7 @@ interface DayInfo {
   status: DayStatus;
   hasExercises: boolean;
   sessionCount: number;
+  checkpointCount: number;
 }
 
 export default function CalendarPage() {
@@ -60,13 +61,14 @@ export default function CalendarPage() {
 
   // Completed modes per date (from sessions)
   const completedModes = useMemo(() => {
-    const map: Record<string, { quick: number; standard: number; deep: number; total: number }> = {};
+    const map: Record<string, { quick: number; standard: number; deep: number; total: number; checkpoints: number }> = {};
     if (sessions) {
       for (const s of sessions) {
-        if (!map[s.date]) map[s.date] = { quick: 0, standard: 0, deep: 0, total: 0 };
+        if (!map[s.date]) map[s.date] = { quick: 0, standard: 0, deep: 0, total: 0, checkpoints: 0 };
         if (s.mode === "quick") map[s.date].quick += 1;
         if (s.mode === "standard") map[s.date].standard += 1;
         if (s.mode === "deep") map[s.date].deep += 1;
+        if (s.checkpointAwardedId) map[s.date].checkpoints += 1;
         map[s.date].total += 1;
       }
     }
@@ -100,6 +102,7 @@ export default function CalendarPage() {
         status: getTierStatus(date, hasExercises, isFuture),
         hasExercises,
         sessionCount: completedModes[date]?.total ?? 0,
+        checkpointCount: completedModes[date]?.checkpoints ?? 0,
       });
     }
     return result;
@@ -200,6 +203,9 @@ export default function CalendarPage() {
                     {day.sessionCount}
                   </span>
                 )}
+                {day.checkpointCount > 0 && (
+                  <span className="absolute -top-0.5 -left-0.5 w-2 h-2 rounded-full bg-success" />
+                )}
               </button>
             );
           })}
@@ -223,6 +229,9 @@ export default function CalendarPage() {
           {(completedModes[selectedDate]?.total ?? 0) > 0 && (
             <div className="bg-card rounded-xl border border-white/10 p-2.5 text-[11px] text-white/45 text-center">
               Sessions: Bronze {completedModes[selectedDate]?.quick ?? 0} · Silver {completedModes[selectedDate]?.standard ?? 0} · Gold {completedModes[selectedDate]?.deep ?? 0}
+              {(completedModes[selectedDate]?.checkpoints ?? 0) > 0 && (
+                <> · Checkpoints {completedModes[selectedDate]?.checkpoints ?? 0}</>
+              )}
             </div>
           )}
 

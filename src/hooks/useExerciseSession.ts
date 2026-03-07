@@ -57,11 +57,15 @@ function buildSessionSignature(exercises: Exercise[], mode: ExerciseMode): strin
   for (const ex of exercises) {
     typeCounts.set(ex.type, (typeCounts.get(ex.type) ?? 0) + 1);
   }
+  const idFingerprint = exercises
+    .map((ex) => ex._id)
+    .sort()
+    .join(",");
   const fingerprint = Array.from(typeCounts.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([type, count]) => `${type}:${count}`)
     .join("|");
-  return `${mode}|${fingerprint || "empty"}`;
+  return `${mode}|${fingerprint || "empty"}|ids:${idFingerprint || "none"}`;
 }
 
 function mapExerciseTypeToSkills(type: Exercise["type"]): string[] {
@@ -322,12 +326,14 @@ export function useExerciseSession({
   date,
 }: UseExerciseSessionOptions) {
   const saveSession = useMutation(api.sessions.save);
+  const attachMissionOutcome = useMutation(api.sessions.attachMissionOutcome);
   const markComplete = useMutation(api.exercises.markComplete);
   const bulkAddCards = useMutation(api.cards.bulkAdd);
   const updateCardExplanation = useMutation(api.cards.updateExplanation);
   const recordMissionCompletion = useMutation(api.missions.recordLessonCompletion);
 
   const startedAt = useRef(Date.now());
+  const clientSessionId = useRef(`sess-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
   const [current, setCurrent] = useState(0);
   const [results, setResults] = useState<Map<string, ExerciseResult>>(
     new Map(),
@@ -507,8 +513,9 @@ export function useExerciseSession({
           const pct = totalItems > 0 ? correctCount / totalItems : 0.5;
           const rating = Math.round(pct * 4) + 1; // 1-5
 
-          await saveSession({
+          const saveResult = await saveSession({
             date: sessionDate,
+            clientSessionId: clientSessionId.current,
             type: "lesson",
             duration: totalMinutes,
             mode,
@@ -552,7 +559,7 @@ export function useExerciseSession({
 
           try {
             const sessionSignature = buildSessionSignature(exercises, mode);
-            await recordMissionCompletion({
+            const missionResult = await recordMissionCompletion({
               sessionDate,
               scorePercent: Math.round(pct * 100),
               bronzeCredit,
@@ -571,6 +578,15 @@ export function useExerciseSession({
                 count,
               })),
             });
+            if ("id" in saveResult && saveResult.id) {
+              await attachMissionOutcome({
+                sessionId: saveResult.id,
+                missionId: missionResult.missionId,
+                checkpointAwardedId: missionResult.checkpointAwardedId ?? undefined,
+                duplicatePenaltyApplied: missionResult.duplicateSameDay,
+                appliedCredits: missionResult.appliedCredits,
+              });
+            }
           } catch {
             // non-critical
           }
@@ -589,6 +605,7 @@ export function useExerciseSession({
           }
 
           setError(null);
+          clientSessionId.current = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
         } catch (e) {
           setError(e instanceof Error ? e.message : "Failed to save session");
         } finally {
@@ -606,6 +623,7 @@ export function useExerciseSession({
       exercises,
       markComplete,
       saveSession,
+      attachMissionOutcome,
       bulkAddCards,
       updateCardExplanation,
       recordMissionCompletion,

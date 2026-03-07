@@ -24,7 +24,7 @@ interface CatalogMission {
   required: boolean;
   title: string;
   summary: string;
-  checkpoints?: Array<{ id: string; required: boolean }>;
+  checkpoints?: Array<{ id: string; title: string; description: string; required: boolean; minScore: number }>;
   exerciseTargets: {
     bronzeReviews: number;
     silverDrills: number;
@@ -349,6 +349,9 @@ export default function MissionsPage() {
                 const completedCheckpointCount = (progress?.completedCheckpointIds ?? []).filter((id) =>
                   (mission.checkpoints ?? []).some((cp) => cp.required && cp.id === id),
                 ).length;
+                const nextCheckpoint = (mission.checkpoints ?? []).find(
+                  (cp) => !(progress?.completedCheckpointIds ?? []).includes(cp.id),
+                );
 
                 return (
                   <div
@@ -385,6 +388,25 @@ export default function MissionsPage() {
                         <p>Checkpoints {completedCheckpointCount}/{requiredCheckpointTotal}</p>
                       )}
                     </div>
+                    {mission.checkpoints && mission.checkpoints.length > 0 && (
+                      <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.02] p-2 space-y-1">
+                        <p className="text-[10px] text-white/35 uppercase tracking-wider">Checkpoint Path</p>
+                        {mission.checkpoints.slice(0, 4).map((cp) => {
+                          const done = (progress?.completedCheckpointIds ?? []).includes(cp.id);
+                          return (
+                            <p key={cp.id} className={cn("text-[11px]", done ? "text-success" : "text-white/50")}>
+                              {done ? "✓" : "•"} {cp.title}
+                              {cp.required ? "" : " (optional)"}
+                            </p>
+                          );
+                        })}
+                        {nextCheckpoint && (
+                          <p className="text-[11px] text-accent-light pt-0.5">
+                            Next: {nextCheckpoint.title} (min {nextCheckpoint.minScore}%)
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     <div className="mt-3 flex items-center gap-2">
                       <button

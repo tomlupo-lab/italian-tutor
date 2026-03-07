@@ -256,9 +256,9 @@ export default function Home() {
           <>
             <p className="text-sm font-semibold">{activeProgress.mission.title}</p>
             <p className="text-xs text-white/45">
-              Bronze {activeProgress.active.credits.bronze}/{activeProgress.mission.exerciseTargets.bronzeReviews} ·
-              Silver {activeProgress.active.credits.silver}/{activeProgress.mission.exerciseTargets.silverDrills} ·
-              Gold {activeProgress.active.credits.gold}/{activeProgress.mission.exerciseTargets.goldConversations}
+              Bronze {activeProgress.active.credits?.bronze ?? 0}/{activeProgress.mission.exerciseTargets.bronzeReviews} ·
+              Silver {activeProgress.active.credits?.silver ?? 0}/{activeProgress.mission.exerciseTargets.silverDrills} ·
+              Gold {activeProgress.active.credits?.gold ?? 0}/{activeProgress.mission.exerciseTargets.goldConversations}
             </p>
             {activeProgress.blocker ? (
               <Link

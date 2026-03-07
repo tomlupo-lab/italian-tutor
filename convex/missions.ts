@@ -221,6 +221,13 @@ export const setActiveMission = mutation({
         active: true,
         status: existing.status === "completed" ? "completed" : "active",
         startedAt: existing.startedAt ?? Date.now(),
+        credits: existing.credits ?? { bronze: 0, silver: 0, gold: 0 },
+        sessionsCompleted: existing.sessionsCompleted ?? 0,
+        totalScore: existing.totalScore ?? 0,
+        averageScore: existing.averageScore ?? 0,
+        criticalErrorsCount: existing.criticalErrorsCount ?? 0,
+        skillPoints: existing.skillPoints ?? [],
+        errorCounts: existing.errorCounts ?? [],
       });
       return { status: "updated" as const };
     }
@@ -365,24 +372,25 @@ export const recordLessonCompletion = mutation({
 
     if (!mission) throw new Error("Mission catalog entry missing");
 
+    const baseCredits = missionProgress.credits ?? { bronze: 0, silver: 0, gold: 0 };
     const nextCredits = {
-      bronze: missionProgress.credits.bronze + args.bronzeCredit,
-      silver: missionProgress.credits.silver + args.silverCredit,
-      gold: missionProgress.credits.gold + args.goldCredit,
+      bronze: baseCredits.bronze + args.bronzeCredit,
+      silver: baseCredits.silver + args.silverCredit,
+      gold: baseCredits.gold + args.goldCredit,
     };
 
-    const nextSessions = missionProgress.sessionsCompleted + 1;
-    const nextTotalScore = missionProgress.totalScore + args.scorePercent;
+    const nextSessions = (missionProgress.sessionsCompleted ?? 0) + 1;
+    const nextTotalScore = (missionProgress.totalScore ?? 0) + args.scorePercent;
     const nextAverage = nextSessions > 0 ? Math.round((nextTotalScore / nextSessions) * 10) / 10 : 0;
 
-    const currentSkillPairs = missionProgress.skillPoints.map((x) => ({ key: x.skillKey, count: x.points }));
+    const currentSkillPairs = (missionProgress.skillPoints ?? []).map((x) => ({ key: x.skillKey, count: x.points }));
     const deltaSkillPairs = toPairs((args.skillDeltas ?? []).map((x) => ({ skillKey: x.skillKey, points: x.points })));
     const mergedSkillPairs = mergeCounterList(currentSkillPairs, deltaSkillPairs).map((x) => ({
       skillKey: x.key,
       points: x.count,
     }));
 
-    const currentErrorPairs = missionProgress.errorCounts.map((x) => ({ key: x.errorKey, count: x.count }));
+    const currentErrorPairs = (missionProgress.errorCounts ?? []).map((x) => ({ key: x.errorKey, count: x.count }));
     const deltaErrorPairs = toPairs((args.errorDeltas ?? []).map((x) => ({ errorKey: x.errorKey, count: x.count })));
     const mergedErrorPairs = mergeCounterList(currentErrorPairs, deltaErrorPairs).map((x) => ({
       errorKey: x.key,
@@ -394,7 +402,7 @@ export const recordLessonCompletion = mutation({
       nextCredits.silver >= mission.exerciseTargets.silverDrills &&
       nextCredits.gold >= mission.exerciseTargets.goldConversations &&
       nextAverage >= mission.passPolicy.minCompositeScore &&
-      (!mission.passPolicy.requireCriticalErrorsZero || missionProgress.criticalErrorsCount + criticalErrors === 0);
+      (!mission.passPolicy.requireCriticalErrorsZero || (missionProgress.criticalErrorsCount ?? 0) + criticalErrors === 0);
 
     await ctx.db.patch(missionProgress._id, {
       status: missionCompleted ? "completed" : "active",
@@ -405,7 +413,7 @@ export const recordLessonCompletion = mutation({
       sessionsCompleted: nextSessions,
       totalScore: nextTotalScore,
       averageScore: nextAverage,
-      criticalErrorsCount: missionProgress.criticalErrorsCount + criticalErrors,
+      criticalErrorsCount: (missionProgress.criticalErrorsCount ?? 0) + criticalErrors,
       skillPoints: mergedSkillPairs,
       errorCounts: mergedErrorPairs,
     });

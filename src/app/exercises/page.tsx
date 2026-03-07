@@ -221,7 +221,7 @@ export default function ExercisesPage() {
   // ── Mode selection screen ───────────────────────────────
   if (!mode || (exercises.length === 0 && !loading)) {
     return (
-      <main className="min-h-screen max-w-lg mx-auto pb-16 px-4 py-6 space-y-4">
+      <main className="min-h-screen max-w-lg mx-auto px-4 py-6 space-y-4">
         <h1 className="text-lg font-semibold text-center">Drills</h1>
         <p className="text-xs text-white/30 text-center">
           Practice exercises on demand
@@ -385,7 +385,7 @@ export default function ExercisesPage() {
   if (!currentExercise) return null;
 
   return (
-    <main className="max-w-lg mx-auto px-4 py-4 flex flex-col gap-4 pb-16">
+    <main className="max-w-lg mx-auto px-4 py-4 flex flex-col gap-4">
       {/* Progress bar */}
       <div className="flex items-center gap-3">
         <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">

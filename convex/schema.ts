@@ -28,6 +28,7 @@ export default defineSchema({
     source: v.optional(
       v.union(
         v.literal("seed"),
+        v.literal("nightly"),
         v.literal("mission_topup"),
         v.literal("recovery"),
         v.literal("ad_hoc"),

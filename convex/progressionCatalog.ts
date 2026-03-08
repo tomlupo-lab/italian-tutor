@@ -999,3 +999,32 @@ export const LEVEL_ROADMAPS: LevelRoadmap[] = [
     sessionMinimums: { bronze: 0, silver: 0, gold: 0, minutes: 0, activeDays: 0 },
   },
 ];
+
+/**
+ * Maps mission IDs → SRS card tags for topic-matched Bronze deck.
+ * Single source of truth — no hardcoded maps in UI components.
+ */
+export const MISSION_CARD_TAGS: Record<string, string[]> = {
+  "a1-flat-hunt-48h": ["home", "casa"],
+  "a1-dinner-inlaws": ["food", "cibo-bevande", "ristorante", "famiglia"],
+  "a1-last-train": ["travel", "trasporti", "viaggi"],
+  "a1-workweek-milan": ["work", "lavoro"],
+  "a1-shopping-rush": ["shopping", "fare-la-spesa", "shopping-comparativi"],
+  "a1-midnight-pharmacy": ["health", "salute", "dal-dottore", "corpo"],
+  "a1-social-circle": ["social", "presentarsi", "emozioni", "emotions"],
+  "a1-final-day-test": ["routine", "routine-quotidiana"],
+  "a2-roommate-reset": ["home", "casa", "opinioni"],
+  "a2-customer-support-call": ["tech", "tecnologia", "bureaucracy"],
+  "a2-family-visit-plan": ["famiglia", "fare-piani", "travel"],
+  "a2-neighborhood-committee": ["social", "opinioni", "home"],
+  "a2-travel-disruption-chain": ["travel", "trasporti", "viaggi"],
+  "a2-health-followup": ["health", "salute", "dal-dottore"],
+  "a2-final-city-week": ["routine", "routine-quotidiana", "social"],
+  "b1-startup-pitch": ["work", "lavoro", "tech", "tecnologia"],
+  "b1-housing-negotiation": ["home", "casa", "finance"],
+  "b1-media-interview": ["media", "media-notizie", "opinioni"],
+  "b1-team-conflict-mediation": ["work", "lavoro", "emotions", "emozioni"],
+  "b1-bureaucracy-marathon": ["bureaucracy", "email-formali"],
+  "b1-community-event": ["social", "vestiti", "shopping"],
+  "b1-final-b2-bridge": ["connettivi", "congiuntivo-presente", "argomentare"],
+};

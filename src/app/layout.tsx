@@ -5,6 +5,8 @@ import OfflineBanner from "../components/OfflineBanner";
 import ConvexClientProvider from "./ConvexClientProvider";
 import { RegisterSW } from "./RegisterSW";
 
+export const dynamic = 'force-dynamic';
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -15,7 +17,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Italian Tutor — Marco",
+  title: "Italian Tutor \u2014 Marco",
   description: "AI-powered Italian language learning",
   manifest: "/tutor/manifest.json",
   appleWebApp: {

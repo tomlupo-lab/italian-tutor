@@ -343,6 +343,7 @@ export function useExerciseSession({
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [missionCompleted, setMissionCompleted] = useState(false);
 
   const total = exercises.length;
   const currentExercise = exercises[current] ?? null;
@@ -615,6 +616,9 @@ export function useExerciseSession({
                 duplicatePenaltyApplied: missionResult.duplicateSameDay,
                 appliedCredits: missionResult.appliedCredits,
               });
+              if (missionResult.missionCompleted) {
+                setMissionCompleted(true);
+              }
             } catch {
               // non-critical
             }
@@ -684,6 +688,7 @@ export function useExerciseSession({
     error,
     results,
     sessionErrors,
+    missionCompleted,
     submitResult,
     skip,
   };

@@ -5,7 +5,7 @@ import { useExerciseSession } from "@/hooks/useExerciseSession";
 import type { Exercise, ExerciseMode } from "@/lib/exerciseTypes";
 import ExerciseRenderer from "./ExerciseRenderer";
 import ExerciseErrorBoundary from "./ExerciseErrorBoundary";
-import { CheckCircle, Loader2, XCircle } from "lucide-react";
+import { CheckCircle, Loader2, XCircle, PartyPopper } from "lucide-react";
 import Link from "next/link";
 import SessionSummary from "../SessionSummary";
 
@@ -30,6 +30,7 @@ export default function ExerciseFlow({
     error,
     results,
     sessionErrors,
+    missionCompleted,
     submitResult,
     skip,
   } = useExerciseSession({ exercises, mode, date });
@@ -141,8 +142,20 @@ export default function ExerciseFlow({
           </>
         ) : (
           <>
-            <CheckCircle size={48} className="text-success" />
-            <h2 className="text-2xl font-bold">Session Complete!</h2>
+            {missionCompleted ? (
+              <div className="w-full bg-gradient-to-br from-yellow-500/20 to-amber-600/10 rounded-2xl border border-yellow-500/30 p-6 text-center space-y-2 animate-pulse-once">
+                <PartyPopper size={40} className="mx-auto text-yellow-400" />
+                <h2 className="text-2xl font-bold text-yellow-300">Mission Complete!</h2>
+                <p className="text-sm text-yellow-200/70">
+                  All targets reached. Marco is unlocking your next mission.
+                </p>
+              </div>
+            ) : (
+              <>
+                <CheckCircle size={48} className="text-success" />
+                <h2 className="text-2xl font-bold">Session Complete!</h2>
+              </>
+            )}
 
             {/* Contract rules */}
             <div className="w-full bg-card rounded-xl border border-white/10 p-4 space-y-2">

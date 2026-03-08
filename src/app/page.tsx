@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { useQuery } from "convex/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import Link from "next/link";
 import { Flame, Trophy, Zap, Loader2, Flag } from "lucide-react";
@@ -54,6 +54,7 @@ export default function Home() {
 
   const stats = useQuery(api.sessions.getStats);
   const dueCards = useQuery(api.cards.getDue, { limit: 999 });
+  const generateExercises = useMutation(api.exerciseGenerator.generateExercises);
   const milestones = useQuery(api.milestones.getAll);
   const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
   const inventoryStatus = useQuery(
@@ -68,6 +69,26 @@ export default function Home() {
   const catalog = useQuery(api.missions.listCatalog, {}) as
     | { missions: CatalogMission[] }
     | undefined;
+
+  // Auto-generate exercises when inventory is empty and mission is active
+  const [generating, setGenerating] = useState(false);
+  const generatedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      inventoryStatus?.status === "empty" &&
+      activeMission?.missionId &&
+      activeMission.status === "active" &&
+      !generating &&
+      generatedRef.current !== `${today}-${activeMission.missionId}`
+    ) {
+      setGenerating(true);
+      generatedRef.current = `${today}-${activeMission.missionId}`;
+      generateExercises({ date: today, missionId: activeMission.missionId })
+        .then((r) => console.log("Auto-generated exercises:", r))
+        .catch((e) => console.error("Exercise generation failed:", e))
+        .finally(() => setGenerating(false));
+    }
+  }, [inventoryStatus?.status, activeMission?.missionId, activeMission?.status, today, generating, generateExercises]);
 
   // Count exercises per type — include due SRS cards in Bronze count
   const dueCardsCount = dueCards?.length ?? 0;
@@ -154,7 +175,7 @@ export default function Home() {
           <ul className="text-xs text-white/50 space-y-2">
             <li>
               <strong className="text-white/70">3 tiers</strong> — Bronze
-              (5 min), Silver (10 min), Gold (15 min)
+              (vocab), Silver (drills), Gold (conversation)
             </li>
             <li>
               <strong className="text-white/70">8 exercise types</strong> —

@@ -359,8 +359,19 @@ export const generateExercises = mutation({
     }
 
     const seed = date + missionId;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows: Array<Record<string, any>> = [];
+    const rows: Array<{
+      date: string;
+      type: string;
+      order: number;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      content: any;
+      skillId: string;
+      missionId: string;
+      tier: "quick" | "standard" | "deep";
+      difficulty: string;
+      source: string;
+      completed: boolean;
+    }> = [];
     let order = 0;
 
     // ── SRS flashcards (Bronze) ─────────────────────────────────

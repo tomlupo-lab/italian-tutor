@@ -134,7 +134,7 @@ export const bulkAdd = mutation({
       // Deduplicate by Italian text — skip if card already exists
       const existing = await ctx.db
         .query("cards")
-        .filter((q) => q.eq(q.field("it"), card.it))
+        .withIndex("by_it", (q) => q.eq("it", card.it))
         .first();
       if (existing) continue;
 
@@ -160,7 +160,7 @@ export const updateExplanation = mutation({
   handler: async (ctx, args) => {
     const card = await ctx.db
       .query("cards")
-      .filter((q) => q.eq(q.field("it"), args.it))
+      .withIndex("by_it", (q) => q.eq("it", args.it))
       .first();
     if (!card) return { updated: false };
     await ctx.db.patch(card._id, { en: args.en });
@@ -335,10 +335,10 @@ export const upsert = mutation({
     quality: v.number(), // SM-2 quality: 1 (again), 3 (good), 5 (easy)
   },
   handler: async (ctx, args) => {
-    // Try to find existing card by Italian text
+    // Try to find existing card by Italian text (indexed)
     const existing = await ctx.db
       .query("cards")
-      .filter((q) => q.eq(q.field("it"), args.it))
+      .withIndex("by_it", (q) => q.eq("it", args.it))
       .first();
 
     const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });

@@ -106,7 +106,8 @@ export default defineSchema({
   })
     .index("by_next_review", ["nextReview"])
     .index("by_tag", ["tag"])
-    .index("by_level", ["level"]),
+    .index("by_level", ["level"])
+    .index("by_it", ["it"]),
 
   // ── Milestones (read replica from quark.db) ──────────────────────
   milestones: defineTable({

@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import type { VocabCard } from "../../data/vocab";
-import Flashcard, { speakItalian } from "../../components/Flashcard";
-import type { CardMode } from "../../components/Flashcard";
+// VocabCard type no longer needed — SrsCard handles its own data
+import SrsCard from "../../components/SrsCard";
+
+type CardMode = "classic" | "reverse" | "listening" | "cloze";
 import { cn } from "../../lib/cn";
 import { Loader2, X, ChevronDown, ArrowLeft } from "lucide-react";
 import ExerciseErrorBoundary from "../../components/exercises/ExerciseErrorBoundary";
@@ -31,15 +32,7 @@ const TIER_KEY = "italian-tutor-tier-scores";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ConvexCard = Record<string, any>;
 
-function toVocabCard(card: ConvexCard): VocabCard {
-  return {
-    id: card._id,
-    it: card.it,
-    en: card.en,
-    ex: card.example || card.it,
-    tag: card.tag || card.errorCategory,
-  };
-}
+// toVocabCard removed — SrsCard takes raw card data
 
 export default function PracticePage() {
   // Filter state
@@ -54,7 +47,7 @@ export default function PracticePage() {
 
   // Session state
   const [idx, setIdx] = useState(0);
-  const [flipped, setFlipped] = useState(false);
+  // flipped state now managed inside SrsCard
   const [reviewed, setReviewed] = useState(0);
   const [totalQuality, setTotalQuality] = useState(0);
   const [done, setDone] = useState(false);
@@ -136,7 +129,6 @@ export default function PracticePage() {
   // Reset session when filters change
   useEffect(() => {
     setIdx(0);
-    setFlipped(false);
     setReviewed(0);
     setTotalQuality(0);
     setDone(false);
@@ -159,21 +151,10 @@ export default function PracticePage() {
   }, [tagDropdownOpen]);
 
   // Auto-speak on card change
-  useEffect(() => {
-    if (!currentCard || done) return;
-    if (mode === "classic" || mode === "listening") {
-      speakItalian(currentCard.it, 0.85);
-    }
-  }, [idx, currentCard, mode, done]);
-
-  // Auto-speak Italian when reverse card is flipped
-  useEffect(() => {
-    if (!currentCard || mode !== "reverse" || !flipped) return;
-    speakItalian(currentCard.it, 0.85);
-  }, [flipped, mode, currentCard]);
+  // Auto-speak handled inside SrsCard component
 
   const handleFeedback = useCallback(
-    (quality: 0 | 2 | 3 | 5) => {
+    (quality: number) => {
       if (!currentCard) return;
 
       reviewCard({
@@ -183,7 +164,6 @@ export default function PracticePage() {
 
       setTotalQuality((prev) => prev + quality);
       setReviewed((prev) => prev + 1);
-      setFlipped(false);
 
       if (idx < cards.length - 1) {
         setIdx((i) => i + 1);
@@ -418,7 +398,6 @@ export default function PracticePage() {
   }
 
   if (!currentCard) return null;
-  const vocabCard = toVocabCard(currentCard);
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center max-w-lg mx-auto px-4 gap-4">
@@ -447,7 +426,6 @@ export default function PracticePage() {
             key={m.key}
             onClick={() => {
               setMode(m.key);
-              setFlipped(false);
             }}
             className={cn(
               "px-3 py-1.5 rounded-full text-xs font-medium transition",
@@ -477,70 +455,19 @@ export default function PracticePage() {
         </div>
       </div>
 
-      {/* Card badges */}
-      <div className="flex gap-2 items-center">
-        {currentCard.level && (
-          <span
-            className={cn(
-              "text-[10px] px-2 py-0.5 rounded-full font-medium border",
-              LEVEL_COLORS[currentCard.level] ||
-                "bg-white/10 text-white/50 border-white/20",
-            )}
-          >
-            {currentCard.level}
-          </span>
-        )}
-        {currentCard.source === "correction" && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-warn/20 text-warn">
-            From your mistakes
-          </span>
-        )}
-      </div>
-
-      <ExerciseErrorBoundary onSkip={() => handleFeedback(1)}>
-        <Flashcard
-          card={vocabCard}
-          flipped={flipped}
-          onFlip={() => setFlipped(!flipped)}
-          mode={mode}
-          speechRate={0.85}
+      <ExerciseErrorBoundary onSkip={() => handleFeedback(0)}>
+        <SrsCard
+          card={{
+            front: currentCard.it,
+            back: currentCard.en,
+            example: currentCard.example,
+            tag: currentCard.tag,
+            level: currentCard.level,
+          }}
+          mode={mode === "cloze" ? "classic" : mode as "classic" | "reverse" | "listening"}
+          onRate={handleFeedback}
         />
       </ExerciseErrorBoundary>
-
-      {flipped ? (
-        <div className="grid grid-cols-4 gap-2">
-          <button
-            onClick={() => handleFeedback(0)}
-            className="py-3 rounded-xl bg-danger/20 border border-danger/30 hover:bg-danger/30 transition text-sm font-medium"
-            aria-label="Again — review soon"
-          >
-            Again
-          </button>
-          <button
-            onClick={() => handleFeedback(2)}
-            className="py-3 rounded-xl bg-orange-500/20 border border-orange-500/30 hover:bg-orange-500/30 transition text-sm font-medium"
-            aria-label="Hard — short interval"
-          >
-            Hard
-          </button>
-          <button
-            onClick={() => handleFeedback(3)}
-            className="py-3 rounded-xl bg-warn/20 border border-warn/30 hover:bg-warn/30 transition text-sm font-medium"
-            aria-label="Good — review later"
-          >
-            Good
-          </button>
-          <button
-            onClick={() => handleFeedback(5)}
-            className="py-3 rounded-xl bg-success/20 border border-success/30 hover:bg-success/30 transition text-sm font-medium"
-            aria-label="Easy — long interval"
-          >
-            Easy
-          </button>
-        </div>
-      ) : (
-        <p className="text-white/20 text-xs">Tap card to flip</p>
-      )}
     </main>
   );
 }

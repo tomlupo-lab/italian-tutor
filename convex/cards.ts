@@ -31,7 +31,7 @@ export const getAll = query({
 export const review = mutation({
   args: {
     cardId: v.id("cards"),
-    quality: v.number(), // 1 (again), 3 (good), 5 (easy)
+    quality: v.number(), // 0 (again), 2 (hard), 3 (good), 5 (easy)
   },
   handler: async (ctx, args) => {
     const card = await ctx.db.get(args.cardId);
@@ -40,18 +40,22 @@ export const review = mutation({
     const q = args.quality;
     let { ease, interval, repetitions } = card;
 
-    if (q < 3) {
-      // Failed — reset
+    if (q === 0) {
+      // Again — full reset
       repetitions = 0;
       interval = 1;
+    } else if (q <= 2) {
+      // Hard — got it but struggled. Keep progress, shorter interval
+      repetitions = Math.max(1, repetitions);
+      interval = Math.max(1, Math.round(interval * 0.6));
     } else {
-      // Passed
+      // Good (3) or Easy (5) — advance normally
       if (repetitions === 0) {
         interval = 1;
       } else if (repetitions === 1) {
-        interval = 6;
+        interval = q >= 5 ? 8 : 6;
       } else {
-        interval = Math.round(interval * ease);
+        interval = Math.round(interval * ease * (q >= 5 ? 1.2 : 1.0));
       }
       repetitions += 1;
     }
@@ -348,16 +352,19 @@ export const upsert = mutation({
       const q = args.quality;
       let { ease, interval, repetitions } = existing;
 
-      if (q < 3) {
+      if (q === 0) {
         repetitions = 0;
         interval = 1;
+      } else if (q <= 2) {
+        repetitions = Math.max(1, repetitions);
+        interval = Math.max(1, Math.round(interval * 0.6));
       } else {
         if (repetitions === 0) {
           interval = 1;
         } else if (repetitions === 1) {
-          interval = 6;
+          interval = q >= 5 ? 8 : 6;
         } else {
-          interval = Math.round(interval * ease);
+          interval = Math.round(interval * ease * (q >= 5 ? 1.2 : 1.0));
         }
         repetitions += 1;
         ease = Math.max(1.3, ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02)));

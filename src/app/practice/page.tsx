@@ -173,7 +173,7 @@ export default function PracticePage() {
   }, [flipped, mode, currentCard]);
 
   const handleFeedback = useCallback(
-    (quality: 1 | 3 | 5) => {
+    (quality: 0 | 2 | 3 | 5) => {
       if (!currentCard) return;
 
       reviewCard({
@@ -508,24 +508,31 @@ export default function PracticePage() {
       </ExerciseErrorBoundary>
 
       {flipped ? (
-        <div className="flex gap-3">
+        <div className="grid grid-cols-4 gap-2">
           <button
-            onClick={() => handleFeedback(1)}
-            className="px-5 py-3 rounded-xl bg-danger/20 border border-danger/30 hover:bg-danger/30 transition text-sm font-medium"
+            onClick={() => handleFeedback(0)}
+            className="py-3 rounded-xl bg-danger/20 border border-danger/30 hover:bg-danger/30 transition text-sm font-medium"
             aria-label="Again — review soon"
           >
             Again
           </button>
           <button
+            onClick={() => handleFeedback(2)}
+            className="py-3 rounded-xl bg-orange-500/20 border border-orange-500/30 hover:bg-orange-500/30 transition text-sm font-medium"
+            aria-label="Hard — short interval"
+          >
+            Hard
+          </button>
+          <button
             onClick={() => handleFeedback(3)}
-            className="px-5 py-3 rounded-xl bg-warn/20 border border-warn/30 hover:bg-warn/30 transition text-sm font-medium"
+            className="py-3 rounded-xl bg-warn/20 border border-warn/30 hover:bg-warn/30 transition text-sm font-medium"
             aria-label="Good — review later"
           >
             Good
           </button>
           <button
             onClick={() => handleFeedback(5)}
-            className="px-5 py-3 rounded-xl bg-success/20 border border-success/30 hover:bg-success/30 transition text-sm font-medium"
+            className="py-3 rounded-xl bg-success/20 border border-success/30 hover:bg-success/30 transition text-sm font-medium"
             aria-label="Easy — long interval"
           >
             Easy

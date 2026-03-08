@@ -24,6 +24,35 @@ const MODE_LABELS: Record<ExerciseMode, string> = {
   deep: "Gold",
 };
 
+// Map mission topics to card tags for unified Bronze deck
+const MISSION_CARD_TAGS: Record<string, string[]> = {
+  "a1-flat-hunt-48h": ["home", "casa"],
+  "a1-dinner-inlaws": ["food", "cibo-bevande", "ristorante", "famiglia"],
+  "a1-last-train": ["travel", "trasporti", "viaggi"],
+  "a1-workweek-milan": ["work", "lavoro"],
+  "a1-shopping-rush": ["shopping", "fare-la-spesa", "shopping-comparativi"],
+  "a1-midnight-pharmacy": ["health", "salute", "dal-dottore", "corpo"],
+  "a1-social-circle": ["social", "presentarsi", "emozioni", "emotions"],
+  "a1-final-day-test": ["routine", "routine-quotidiana"],
+  "a2-roommate-reset": ["home", "casa", "opinioni"],
+  "a2-customer-support-call": ["tech", "tecnologia", "bureaucracy"],
+  "a2-family-visit-plan": ["famiglia", "fare-piani", "travel"],
+  "a2-neighborhood-committee": ["social", "opinioni", "home"],
+  "a2-travel-disruption-chain": ["travel", "trasporti", "viaggi"],
+  "a2-health-followup": ["health", "salute", "dal-dottore"],
+  "a2-final-city-week": ["routine", "routine-quotidiana", "social"],
+  "b1-startup-pitch": ["work", "lavoro", "tech", "tecnologia"],
+  "b1-housing-negotiation": ["home", "casa", "finance"],
+  "b1-media-interview": ["media", "media-notizie", "opinioni"],
+  "b1-team-conflict-mediation": ["work", "lavoro", "emotions", "emozioni"],
+  "b1-bureaucracy-marathon": ["bureaucracy", "email-formali"],
+  "b1-community-event": ["social", "vestiti", "shopping"],
+  "b1-final-b2-bridge": ["connettivi", "congiuntivo-presente", "argomentare"],
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ConvexCard = Record<string, any>;
+
 interface ActiveMissionResult {
   missionId: string;
   title: string;
@@ -53,7 +82,7 @@ export default function SessionPage() {
   );
 
   const allExercises = useQuery(api.exercises.getByDate, { date: dateParam });
-  // dueCards moved to /practice page (standalone SRS review)
+  const dueCards = useQuery(api.cards.getDue, { limit: 200 });
   const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
   const inventoryStatus = useQuery(
     api.exercises.getInventoryStatus,
@@ -110,11 +139,20 @@ export default function SessionPage() {
     return bestTag;
   }, [allExercises]);
 
+  // Topic-matched due cards for unified Bronze deck
+  const topicDueCards = useMemo(() => {
+    if (!dueCards || !activeMission?.missionId) return [];
+    const missionTags = MISSION_CARD_TAGS[activeMission.missionId] ?? [];
+    if (missionTags.length === 0) return [];
+    const tagSet = new Set(missionTags);
+    return dueCards.filter((c: ConvexCard) => c.tag && tagSet.has(c.tag));
+  }, [dueCards, activeMission?.missionId]);
+
   // Count exercises per type (for mode selector)
-  // Bronze uses SRS exercises from exercises table, not old card deck
+  // Bronze = mission SRS exercises + topic-matched due cards
   const exerciseCounts = useMemo(
-    () => inventoryToExerciseCounts(inventoryStatus, 0),
-    [inventoryStatus],
+    () => inventoryToExerciseCounts(inventoryStatus, topicDueCards.length),
+    [inventoryStatus, topicDueCards.length],
   );
 
   // Bronze now uses ExerciseFlow with SRS exercises from exercises table
@@ -133,10 +171,28 @@ export default function SessionPage() {
   const modeExercises = useMemo(() => {
     if (!selectedMode) return [];
     const allowedTypes = new Set(MODE_TYPES[selectedMode]);
-    return candidateExercises
+    const missionExercises = candidateExercises
       .filter((ex) => allowedTypes.has(ex.type as Exercise["type"]))
       .sort((a, b) => a.order - b.order);
-  }, [candidateExercises, selectedMode]);
+
+    // For Bronze: append topic-matched due cards as SRS exercises
+    if (selectedMode === "quick" && topicDueCards.length > 0) {
+      const cardExercises: Exercise[] = topicDueCards.map((card: ConvexCard, i: number) => ({
+        _id: `card-${card._id}`,
+        date: dateParam,
+        type: "srs" as const,
+        order: 900 + i,
+        content: { front: card.it, back: card.en },
+        difficulty: card.level ?? "A1",
+        completed: false,
+        source: "card_deck" as const,
+        _cardId: card._id,
+      }));
+      return [...missionExercises, ...cardExercises];
+    }
+
+    return missionExercises;
+  }, [candidateExercises, selectedMode, topicDueCards, dateParam]);
 
   const activeProgress = useMemo(() => {
     const active = learnerProgress?.missions?.find((m) => m.active);

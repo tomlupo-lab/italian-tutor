@@ -5,9 +5,9 @@ export default defineSchema({
   // ── Exercises (new adaptive engine) ──────────────────────────────
   // One document per exercise instance. No `mode` field — mode→type
   // mapping is deterministic in the app:
-  //   Quick: srs, cloze, word_builder, pattern_drill, speed_translation
-  //   Standard: Quick + error_hunt, conversation
-  //   Deep: Standard + reflection
+  //   Bronze (quick): srs
+  //   Silver (standard): cloze, word_builder, pattern_drill, speed_translation, error_hunt
+  //   Gold (deep): conversation, reflection
   exercises: defineTable({
     date: v.string(), // YYYY-MM-DD
     type: v.string(), // srs|cloze|word_builder|pattern_drill|speed_translation|error_hunt|conversation|reflection

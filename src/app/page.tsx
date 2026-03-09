@@ -188,22 +188,21 @@ export default function Home() {
           </ul>
         </div>
         <p className="text-xs text-white/30">
-          Marco will unlock fresh practice as your mission and review queue fill in.
+          Start a mission below to unlock adaptive exercises tailored to your level.
           {hasDueCards && " Meanwhile, try some flashcard practice!"}
         </p>
-        {hasDueCards ? (
-          <Link
-            href="/practice"
+        <Link
+            href="/missions"
             className="px-6 py-3 bg-accent rounded-xl text-sm font-medium"
           >
-            Practice SRS cards ({dueCards?.length ?? 0} due)
+            Start Your First Mission
           </Link>
-        ) : (
+        {hasDueCards && (
           <Link
-            href="/progress"
+            href="/practice"
             className="px-6 py-3 bg-card rounded-xl border border-white/10 text-sm"
           >
-            View Progress
+            Practice SRS cards ({dueCards?.length ?? 0} due)
           </Link>
         )}
       </main>
@@ -237,7 +236,7 @@ export default function Home() {
 
       {/* Today's date header */}
       <div className="text-center">
-        <p className="text-xs text-white/30">{today}</p>
+        <p className="text-xs text-white/30">{new Date(today + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "Europe/Warsaw" })}</p>
         <h1 className="text-lg font-semibold mt-0.5">
           {totalExercises > 0
             ? `${totalExercises} exercises ready`
@@ -334,6 +333,24 @@ export default function Home() {
           <p className="text-xs text-white/30">
             Marco adapts new practice from your mission progress, errors, and due reviews.
           </p>
+          {activeMission?.missionId && !generating && (
+            <button
+              onClick={() => {
+                setGenerating(true);
+                generatedRef.current = null;
+                generateExercises({ date: today, missionId: activeMission.missionId })
+                  .then((r) => console.log("Manual generation:", r))
+                  .catch((e) => console.error("Generation failed:", e))
+                  .finally(() => setGenerating(false));
+              }}
+              className="mt-2 px-4 py-2 bg-accent/20 rounded-xl text-sm text-accent-light border border-accent/30"
+            >
+              Generate exercises
+            </button>
+          )}
+          {generating && (
+            <p className="text-xs text-accent-light animate-pulse">Generating...</p>
+          )}
           {hasDueCards && (
             <Link
               href="/practice"

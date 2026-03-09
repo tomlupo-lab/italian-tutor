@@ -16,10 +16,16 @@ export function inventoryToExerciseCounts(
   dueCards: number,
 ): Record<string, number> {
   const counts = inventory?.counts;
+  // All type keys present so ModeSelector sum via MODE_TYPES works correctly
   return {
     srs: Math.max(counts?.quickReady ?? 0, dueCards),
     cloze: counts?.standardReady ?? 0,
+    word_builder: 0,
+    pattern_drill: 0,
+    speed_translation: 0,
+    error_hunt: 0,
     conversation: counts?.deepReady ?? 0,
+    reflection: 0,
   };
 }
 

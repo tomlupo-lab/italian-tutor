@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import Link from "next/link";
-import { Loader2, Flag } from "lucide-react";
+import { Loader2, Flame, Zap } from "lucide-react";
 import { getTodayWarsaw } from "../lib/date";
 import { useRouter } from "next/navigation";
 import type { ExerciseMode } from "@/lib/exerciseTypes";
@@ -232,6 +232,25 @@ export default function Home() {
 
   return (
     <main className="max-w-lg mx-auto px-4 py-4 flex flex-col gap-5">
+      <div className="rounded-2xl border border-white/10 bg-card/70 px-4 py-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl bg-white/[0.03] px-3 py-2">
+            <div className="flex items-center gap-2 text-white/45">
+              <Flame size={14} className="text-orange-400" />
+              <span className="text-[11px] uppercase tracking-wide">Streak</span>
+            </div>
+            <p className="mt-1 text-lg font-semibold">{stats.streak}</p>
+          </div>
+          <div className="rounded-xl bg-white/[0.03] px-3 py-2">
+            <div className="flex items-center gap-2 text-white/45">
+              <Zap size={14} className="text-yellow-400" />
+              <span className="text-[11px] uppercase tracking-wide">Due Review</span>
+            </div>
+            <p className="mt-1 text-lg font-semibold">{dueCardsCount}</p>
+          </div>
+        </div>
+      </div>
+
       <div className="text-center pt-1">
         <p className="text-xs text-white/30">{today}</p>
       </div>
@@ -333,10 +352,24 @@ export default function Home() {
             </Link>
           </>
         )}
-        <div className="pt-2 border-t border-white/10">
-          <Link href="/missions" className="text-xs text-accent-light inline-flex items-center gap-1.5">
-            <Flag size={12} />
-            Manage missions and unlocks
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10">
+          <Link
+            href="/practice"
+            className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition hover:bg-white/[0.06]"
+          >
+            <p className="text-sm font-semibold">SRS Cards</p>
+            <p className="text-[11px] text-white/45 mt-1">
+              {dueCardsCount > 0 ? `${dueCardsCount} due card${dueCardsCount === 1 ? "" : "s"}` : "Due cards only"}
+            </p>
+          </Link>
+          <Link
+            href="/exercises?focus=recovery"
+            className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition hover:bg-white/[0.06]"
+          >
+            <p className="text-sm font-semibold">Error Drills</p>
+            <p className="text-[11px] text-white/45 mt-1">
+              Target recent mistakes with focused drills
+            </p>
           </Link>
         </div>
       </div>

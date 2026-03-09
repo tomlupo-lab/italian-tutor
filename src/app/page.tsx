@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import Link from "next/link";
-import { Loader2, Flame, Zap } from "lucide-react";
+import { Loader2, Flame, Zap, BookOpen, TriangleAlert } from "lucide-react";
 import { getTodayWarsaw } from "../lib/date";
 import { useRouter } from "next/navigation";
 import type { ExerciseMode } from "@/lib/exerciseTypes";
@@ -306,7 +306,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="space-y-3 pt-1">
+            <div className="space-y-2 pt-1">
               {(["quick", "standard", "deep"] as ExerciseMode[]).map((mode) => {
                 const count = (["quick", "standard", "deep"].includes(mode)
                   ? mode === "quick"
@@ -323,7 +323,7 @@ export default function Home() {
                     type="button"
                     onClick={() => handleModeSelect(mode)}
                     disabled={unavailable || generating}
-                    className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                    className={`w-full rounded-xl border px-3.5 py-3 text-left transition ${
                       recommended
                         ? "border-accent/50 bg-accent/10"
                         : "border-white/10 bg-white/[0.03]"
@@ -332,10 +332,10 @@ export default function Home() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-lg">{MODE_COPY[mode].emoji}</span>
+                          <span className="text-base">{MODE_COPY[mode].emoji}</span>
                           <p className="text-sm font-semibold">{MODE_LABEL[mode]}</p>
                         </div>
-                        <p className="mt-1 text-[11px] text-white/45">{MODE_COPY[mode].subtitle}</p>
+                        <p className="mt-0.5 text-[11px] text-white/45">{MODE_COPY[mode].subtitle}</p>
                       </div>
                       <div className="text-right">
                         {recommended && (
@@ -343,15 +343,15 @@ export default function Home() {
                             Now
                           </span>
                         )}
-                        <p className="mt-2 text-[11px] text-white/35">{count} ready</p>
+                        <p className="mt-1.5 text-[11px] text-white/35">{count} ready</p>
                       </div>
                     </div>
-                    <div className="mt-3 space-y-1.5">
+                    <div className="mt-2 space-y-1">
                       <div className="flex items-center justify-between text-[11px] text-white/35">
                         <span>Progress</span>
                         <span>{modeProgress?.[mode].done ?? 0}/{modeProgress?.[mode].target ?? 0}</span>
                       </div>
-                      <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
                         <div
                           className="h-full rounded-full bg-accent transition-all duration-500"
                           style={{ width: `${modeProgress?.[mode].percent ?? 0}%` }}
@@ -394,7 +394,10 @@ export default function Home() {
           href="/practice"
           className="rounded-2xl border border-white/10 bg-card px-4 py-4 text-left transition hover:bg-white/[0.03]"
         >
-          <p className="text-sm font-semibold">SRS Practice</p>
+          <div className="flex items-center gap-2">
+            <BookOpen size={16} className="text-accent-light" />
+            <p className="text-sm font-semibold">SRS Practice</p>
+          </div>
           <p className="mt-1 text-[11px] text-white/45">
             {dueCardsCount > 0 ? `${dueCardsCount} due card${dueCardsCount === 1 ? "" : "s"}` : "All cards with filters and modes"}
           </p>
@@ -403,7 +406,10 @@ export default function Home() {
           href="/exercises?focus=recovery"
           className="rounded-2xl border border-white/10 bg-card px-4 py-4 text-left transition hover:bg-white/[0.03]"
         >
-          <p className="text-sm font-semibold">Error Drills</p>
+          <div className="flex items-center gap-2">
+            <TriangleAlert size={16} className="text-warn" />
+            <p className="text-sm font-semibold">Error Drills</p>
+          </div>
           <p className="mt-1 text-[11px] text-white/45">
             Target recent mistakes with focused drills
           </p>

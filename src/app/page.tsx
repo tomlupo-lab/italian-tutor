@@ -31,6 +31,18 @@ const MODE_COPY: Record<ExerciseMode, { subtitle: string; emoji: string }> = {
   deep: { subtitle: "Conversation", emoji: "🥇" },
 };
 
+const MODE_TARGET_KEY: Record<ExerciseMode, "bronzeReviews" | "silverDrills" | "goldConversations"> = {
+  quick: "bronzeReviews",
+  standard: "silverDrills",
+  deep: "goldConversations",
+};
+
+const MODE_CREDIT_KEY: Record<ExerciseMode, "bronze" | "silver" | "gold"> = {
+  quick: "bronze",
+  standard: "silver",
+  deep: "gold",
+};
+
 export default function Home() {
   const router = useRouter();
   const today = getTodayWarsaw();
@@ -80,14 +92,6 @@ export default function Home() {
     [inventoryStatus, dueCardsCount],
   );
 
-  const totalExercises = useMemo(() => {
-    if (!inventoryStatus) return 0;
-    return (
-      Math.max(inventoryStatus.counts.quickReady, dueCardsCount) +
-      inventoryStatus.counts.standardReady +
-      inventoryStatus.counts.deepReady
-    );
-  }, [inventoryStatus, dueCardsCount]);
   const hasDueCards = dueCardsCount > 0;
   const isFirstRun =
     stats !== undefined &&
@@ -144,6 +148,21 @@ export default function Home() {
       totalTarget,
       percent: totalTarget > 0 ? Math.min(100, Math.round((totalDone / totalTarget) * 100)) : 0,
     };
+  }, [activeProgress]);
+
+  const modeProgress = useMemo(() => {
+    if (!activeProgress?.mission) return null;
+
+    return (["quick", "standard", "deep"] as ExerciseMode[]).reduce((acc, mode) => {
+      const target = activeProgress.mission?.exerciseTargets[MODE_TARGET_KEY[mode]] ?? 0;
+      const done = activeProgress.active.credits?.[MODE_CREDIT_KEY[mode]] ?? 0;
+      acc[mode] = {
+        done,
+        target,
+        percent: target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0,
+      };
+      return acc;
+    }, {} as Record<ExerciseMode, { done: number; target: number; percent: number }>);
   }, [activeProgress]);
 
   const recommendationText = useMemo(() => {
@@ -232,21 +251,18 @@ export default function Home() {
 
   return (
     <main className="max-w-lg mx-auto px-4 py-4 flex flex-col gap-5">
-      <div className="rounded-2xl border border-white/10 bg-card/70 px-4 py-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-white/[0.03] px-3 py-2">
-            <div className="flex items-center gap-2 text-white/45">
-              <Flame size={14} className="text-orange-400" />
-              <span className="text-[11px] uppercase tracking-wide">Streak</span>
-            </div>
-            <p className="mt-1 text-lg font-semibold">{stats.streak}</p>
+      <div className="rounded-2xl border border-white/10 bg-card/70 px-4 py-2.5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Flame size={14} className="text-orange-400" />
+            <span className="text-[11px] uppercase tracking-wide text-white/45">Streak</span>
+            <span className="text-sm font-semibold">{stats.streak}</span>
           </div>
-          <div className="rounded-xl bg-white/[0.03] px-3 py-2">
-            <div className="flex items-center gap-2 text-white/45">
-              <Zap size={14} className="text-yellow-400" />
-              <span className="text-[11px] uppercase tracking-wide">Due Review</span>
-            </div>
-            <p className="mt-1 text-lg font-semibold">{dueCardsCount}</p>
+          <div className="h-4 w-px bg-white/10" />
+          <div className="flex items-center gap-2">
+            <Zap size={14} className="text-yellow-400" />
+            <span className="text-[11px] uppercase tracking-wide text-white/45">Due Review</span>
+            <span className="text-sm font-semibold">{dueCardsCount}</span>
           </div>
         </div>
       </div>
@@ -290,7 +306,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 pt-1">
+            <div className="space-y-3 pt-1">
               {(["quick", "standard", "deep"] as ExerciseMode[]).map((mode) => {
                 const count = (["quick", "standard", "deep"].includes(mode)
                   ? mode === "quick"
@@ -307,22 +323,41 @@ export default function Home() {
                     type="button"
                     onClick={() => handleModeSelect(mode)}
                     disabled={unavailable || generating}
-                    className={`rounded-2xl border px-3 py-3 text-left transition ${
+                    className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
                       recommended
                         ? "border-accent/50 bg-accent/10"
                         : "border-white/10 bg-white/[0.03]"
                     } ${unavailable || generating ? "opacity-50 cursor-not-allowed" : "hover:bg-white/[0.06]"}`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-lg">{MODE_COPY[mode].emoji}</span>
-                      {recommended && (
-                        <span className="text-[10px] rounded-full bg-accent/20 px-1.5 py-0.5 text-accent-light">
-                          Now
-                        </span>
-                      )}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{MODE_COPY[mode].emoji}</span>
+                          <p className="text-sm font-semibold">{MODE_LABEL[mode]}</p>
+                        </div>
+                        <p className="mt-1 text-[11px] text-white/45">{MODE_COPY[mode].subtitle}</p>
+                      </div>
+                      <div className="text-right">
+                        {recommended && (
+                          <span className="text-[10px] rounded-full bg-accent/20 px-1.5 py-0.5 text-accent-light">
+                            Now
+                          </span>
+                        )}
+                        <p className="mt-2 text-[11px] text-white/35">{count} ready</p>
+                      </div>
                     </div>
-                    <p className="mt-2 text-sm font-semibold">{MODE_LABEL[mode]}</p>
-                    <p className="text-[11px] text-white/45">{MODE_COPY[mode].subtitle}</p>
+                    <div className="mt-3 space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px] text-white/35">
+                        <span>Progress</span>
+                        <span>{modeProgress?.[mode].done ?? 0}/{modeProgress?.[mode].target ?? 0}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-accent transition-all duration-500"
+                          style={{ width: `${modeProgress?.[mode].percent ?? 0}%` }}
+                        />
+                      </div>
+                    </div>
                   </button>
                 );
               })}
@@ -352,26 +387,27 @@ export default function Home() {
             </Link>
           </>
         )}
-        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10">
-          <Link
-            href="/practice"
-            className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition hover:bg-white/[0.06]"
-          >
-            <p className="text-sm font-semibold">SRS Cards</p>
-            <p className="text-[11px] text-white/45 mt-1">
-              {dueCardsCount > 0 ? `${dueCardsCount} due card${dueCardsCount === 1 ? "" : "s"}` : "Due cards only"}
-            </p>
-          </Link>
-          <Link
-            href="/exercises?focus=recovery"
-            className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition hover:bg-white/[0.06]"
-          >
-            <p className="text-sm font-semibold">Error Drills</p>
-            <p className="text-[11px] text-white/45 mt-1">
-              Target recent mistakes with focused drills
-            </p>
-          </Link>
-        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Link
+          href="/practice"
+          className="rounded-2xl border border-white/10 bg-card px-4 py-4 text-left transition hover:bg-white/[0.03]"
+        >
+          <p className="text-sm font-semibold">SRS Practice</p>
+          <p className="mt-1 text-[11px] text-white/45">
+            {dueCardsCount > 0 ? `${dueCardsCount} due card${dueCardsCount === 1 ? "" : "s"}` : "All cards with filters and modes"}
+          </p>
+        </Link>
+        <Link
+          href="/exercises?focus=recovery"
+          className="rounded-2xl border border-white/10 bg-card px-4 py-4 text-left transition hover:bg-white/[0.03]"
+        >
+          <p className="text-sm font-semibold">Error Drills</p>
+          <p className="mt-1 text-[11px] text-white/45">
+            Target recent mistakes with focused drills
+          </p>
+        </Link>
       </div>
     </main>
   );

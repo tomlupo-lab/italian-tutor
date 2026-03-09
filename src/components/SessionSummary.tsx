@@ -16,6 +16,12 @@ import {
 import { cn } from "@/lib/cn";
 import type { ExerciseMode } from "@/lib/exerciseTypes";
 import Link from "next/link";
+import type {
+  ActiveMissionResult,
+  CatalogMission,
+  LearnerLevel,
+  LearnerMission,
+} from "@/lib/missionTypes";
 
 interface SessionSummaryProps {
   mode: ExerciseMode;
@@ -43,34 +49,6 @@ interface Milestone {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyCard = Record<string, any>;
 
-type Level = "A1" | "A2" | "B1" | "B2";
-type MissionStatus = "not_started" | "active" | "paused" | "completed";
-
-interface CatalogMission {
-  missionId: string;
-  level: Level;
-  required: boolean;
-}
-
-interface LearnerMission {
-  missionId: string;
-  status: MissionStatus;
-  active: boolean;
-  criticalErrorsCount?: number;
-}
-
-interface LearnerLevel {
-  currentLevel: Level;
-  unlockedLevels: Level[];
-}
-
-interface ActiveMission {
-  missionId: string;
-  level: Level;
-  status: MissionStatus;
-  title: string;
-}
-
 interface RecentSessionOutcome {
   date: string;
   type: "lesson" | "quick_practice" | "free_talk" | "speaking_practice";
@@ -95,7 +73,7 @@ export default function SessionSummary({
   const recentSessions = useQuery(api.sessions.listRecent, { limit: 30 }) as
     | RecentSessionOutcome[]
     | undefined;
-  const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMission | null | undefined;
+  const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
   const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
     | { missions: LearnerMission[]; level?: LearnerLevel | null }
     | undefined;
@@ -322,6 +300,12 @@ export default function SessionSummary({
                 )}
             </div>
           )}
+          <Link
+            href={`/session/${effectiveDate}/history`}
+            className="inline-block text-[11px] text-accent-light hover:text-accent transition"
+          >
+            Review this day
+          </Link>
         </div>
       )}
 

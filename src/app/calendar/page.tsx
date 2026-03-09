@@ -4,11 +4,18 @@ import { useState, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { cn } from "../../lib/cn";
 import { getNowWarsaw } from "../../lib/date";
 import ModeSelector from "../../components/ModeSelector";
 import { useRouter } from "next/navigation";
 import type { ExerciseMode } from "@/lib/exerciseTypes";
+import {
+  inventoryToExerciseCounts,
+  pickRunnableMode,
+  type InventoryStatusResult,
+} from "@/lib/inventoryStatus";
+import type { CatalogMission, LearnerMission } from "@/lib/missionTypes";
 
 function formatDate(y: number, m: number, d: number) {
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -39,12 +46,25 @@ export default function CalendarPage() {
 
   const exerciseSummaries = useQuery(api.exercises.getDateSummaries, { from, to });
   const sessions = useQuery(api.sessions.getByDateRange, { from, to });
+  const dueCards = useQuery(api.cards.getDue, { limit: 999 });
+  const activeMission = useQuery(api.missions.getActiveMission, {});
+  const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
+    | { missions: LearnerMission[] }
+    | undefined;
+  const catalog = useQuery(api.missions.listCatalog, {}) as
+    | { missions: CatalogMission[] }
+    | undefined;
 
-  // Fetch exercises for selected date (for ModeSelector counts)
-  const selectedExercises = useQuery(
-    api.exercises.getByDate,
+  const selectedInventoryStatus = useQuery(
+    api.exercises.getInventoryStatus,
     selectedDate ? { date: selectedDate } : "skip",
-  );
+  ) as InventoryStatusResult | undefined;
+  const selectedMissionInventoryStatus = useQuery(
+    api.exercises.getInventoryStatus,
+    selectedDate && activeMission?.missionId
+      ? { date: selectedDate, missionId: activeMission.missionId }
+      : "skip",
+  ) as InventoryStatusResult | undefined;
 
   const firstDayOfMonth = new Date(year, month, 1).getDay();
   const startOffset = (firstDayOfMonth + 6) % 7; // Mon=0
@@ -93,7 +113,7 @@ export default function CalendarPage() {
 
     for (let d = 1; d <= daysInMonth; d++) {
       const date = formatDate(year, month, d);
-      const hasExercises = exerciseDates.has(date);
+      const hasExercises = exerciseDates.has(date) || (date === todayStr && (dueCards?.length ?? 0) > 0);
       const isFuture = date > todayStr;
 
       result.push({
@@ -107,7 +127,7 @@ export default function CalendarPage() {
     }
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, month, daysInMonth, startOffset, exerciseDates, completedModes, todayStr]);
+  }, [year, month, daysInMonth, startOffset, exerciseDates, completedModes, todayStr, dueCards]);
 
   const prevMonth = () => {
     if (month === 0) { setYear(year - 1); setMonth(11); }
@@ -122,13 +142,13 @@ export default function CalendarPage() {
 
   // Exercise counts for ModeSelector
   const exerciseCounts = useMemo(() => {
-    if (!selectedExercises) return {};
-    const counts: Record<string, number> = {};
-    for (const ex of selectedExercises) {
-      counts[ex.type] = (counts[ex.type] ?? 0) + 1;
-    }
-    return counts;
-  }, [selectedExercises]);
+    const inventory = activeMission?.missionId
+      ? selectedMissionInventoryStatus
+      : selectedInventoryStatus;
+    if (!inventory) return {};
+    const dueCardsCount = selectedDate === todayStr ? (dueCards?.length ?? 0) : 0;
+    return inventoryToExerciseCounts(inventory, dueCardsCount);
+  }, [activeMission?.missionId, selectedMissionInventoryStatus, selectedInventoryStatus, selectedDate, todayStr, dueCards]);
 
   const handleModeSelect = (mode: ExerciseMode) => {
     if (selectedDate) {
@@ -138,7 +158,41 @@ export default function CalendarPage() {
 
   const monthName = new Date(year, month).toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const isToday = (date: string) => date === todayStr;
-  const selectedHasExercises = selectedDate ? exerciseDates.has(selectedDate) : false;
+  const selectedHasExercises = useMemo(
+    () => Object.values(exerciseCounts).some((count) => count > 0),
+    [exerciseCounts],
+  );
+  const selectedSessionStats = selectedDate ? completedModes[selectedDate] : null;
+  const selectedIsPast = Boolean(selectedDate && selectedDate < todayStr);
+  const suggestedMode = useMemo(() => {
+    const inventory = activeMission?.missionId
+      ? selectedMissionInventoryStatus
+      : selectedInventoryStatus;
+    if (!inventory) return undefined;
+    const dueCardsCount = selectedDate === todayStr ? (dueCards?.length ?? 0) : 0;
+    const active = learnerProgress?.missions?.find((m) => m.active);
+    const mission = active ? catalog?.missions?.find((m) => m.missionId === active.missionId) : null;
+
+    if (selectedDate === todayStr && active && mission) {
+      const bronzeMissing = mission.exerciseTargets.bronzeReviews - (active.credits?.bronze ?? 0);
+      const silverMissing = mission.exerciseTargets.silverDrills - (active.credits?.silver ?? 0);
+      const goldMissing = mission.exerciseTargets.goldConversations - (active.credits?.gold ?? 0);
+      const preferred =
+        goldMissing > 0 ? "deep" : silverMissing > 0 ? "standard" : bronzeMissing > 0 ? "quick" : "standard";
+      return pickRunnableMode(preferred, inventory, dueCardsCount) ?? undefined;
+    }
+
+    return pickRunnableMode("standard", inventory, dueCardsCount) ?? undefined;
+  }, [
+    activeMission?.missionId,
+    selectedMissionInventoryStatus,
+    selectedInventoryStatus,
+    selectedDate,
+    todayStr,
+    dueCards,
+    learnerProgress?.missions,
+    catalog?.missions,
+  ]);
 
   return (
     <main className="min-h-screen max-w-lg mx-auto px-4 py-4 space-y-4">
@@ -239,8 +293,28 @@ export default function CalendarPage() {
             <ModeSelector
               exerciseCounts={exerciseCounts}
               onSelect={handleModeSelect}
+              suggested={suggestedMode}
               date={selectedDate}
             />
+          ) : selectedSessionStats && selectedSessionStats.total > 0 && selectedIsPast ? (
+            <div className="bg-card rounded-2xl border border-white/10 p-4 text-center space-y-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-accent-light">Past Session Summary</p>
+                <p className="text-sm text-white/65 mt-1">
+                  Bronze {selectedSessionStats.quick} · Silver {selectedSessionStats.standard} · Gold {selectedSessionStats.deep}
+                </p>
+                <p className="text-xs text-white/35 mt-1">
+                  {selectedSessionStats.total} total session{selectedSessionStats.total === 1 ? "" : "s"}
+                  {selectedSessionStats.checkpoints > 0 ? ` · ${selectedSessionStats.checkpoints} checkpoint${selectedSessionStats.checkpoints === 1 ? "" : "s"}` : ""}
+                </p>
+              </div>
+              <Link
+                href={`/session/${selectedDate}/history`}
+                className="inline-block px-4 py-2 rounded-xl border border-white/10 text-sm text-white/70 hover:bg-white/5 transition"
+              >
+                View session details
+              </Link>
+            </div>
           ) : (
             <div className="bg-card rounded-2xl border border-white/10 p-4 text-center">
               <p className="text-white/30 text-sm">No exercises for this day</p>

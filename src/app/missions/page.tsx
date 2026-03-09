@@ -10,68 +10,21 @@ import {
   pickRunnableMode,
   type InventoryStatusResult,
 } from "@/lib/inventoryStatus";
+import type {
+  CatalogMission,
+  LearnerLevel,
+  LearnerMission,
+  LearnerSkill,
+  Level,
+  RoadmapRule,
+} from "@/lib/missionTypes";
 
-type Level = "A1" | "A2" | "B1" | "B2";
 const LEVELS: Level[] = ["A1", "A2", "B1", "B2"];
-type MissionStatus = "not_started" | "active" | "paused" | "completed";
 
 function prettySkill(skillKey: string): string {
   return skillKey
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-interface CatalogMission {
-  missionId: string;
-  level: Level;
-  order: number;
-  required: boolean;
-  title: string;
-  summary: string;
-  checkpoints?: Array<{ id: string; title: string; description: string; required: boolean; minScore: number }>;
-  exerciseTargets: {
-    bronzeReviews: number;
-    silverDrills: number;
-    goldConversations: number;
-  };
-}
-
-interface LearnerMission {
-  missionId: string;
-  status: MissionStatus;
-  active: boolean;
-  credits: { bronze: number; silver: number; gold: number };
-  criticalErrorsCount?: number;
-  averageScore?: number;
-  completedCheckpointIds?: string[];
-}
-
-interface LearnerLevel {
-  currentLevel: Level;
-  unlockedLevels: Level[];
-  tierCredits: { bronze: number; silver: number; gold: number };
-  minutesTotal: number;
-  activeDates: string[];
-}
-
-interface LearnerSkill {
-  skillKey: string;
-  points: number;
-}
-
-interface RoadmapRule {
-  level: Level;
-  requiredMissionIds: string[];
-  minCompletedMissions: number;
-  minOptionalMissions: number;
-  skillThresholds: Array<{ skillKey: string; minPoints: number }>;
-  sessionMinimums: {
-    bronze: number;
-    silver: number;
-    gold: number;
-    minutes: number;
-    activeDays: number;
-  };
 }
 
 export default function MissionsPage() {
@@ -154,9 +107,9 @@ export default function MissionsPage() {
       optionalTarget: roadmap.minOptionalMissions,
       skillChecks,
       sessions,
-      currentTier: learner.level.tierCredits,
-      currentMinutes: learner.level.minutesTotal,
-      currentDays: learner.level.activeDates.length,
+      currentTier: learner.level.tierCredits ?? { bronze: 0, silver: 0, gold: 0 },
+      currentMinutes: learner.level.minutesTotal ?? 0,
+      currentDays: learner.level.activeDates?.length ?? 0,
     };
   }, [learner, roadmapData?.roadmap, catalog?.missions]);
 
@@ -304,6 +257,11 @@ export default function MissionsPage() {
                     ? `Continue active mission (${runnableMode === "quick" ? "Bronze" : runnableMode === "standard" ? "Silver" : "Gold"})`
                     : "Preparing next mission content"}
               </Link>
+              {runnableMode && (activeMission?.criticalErrorsCount ?? 0) === 0 && (
+                <span className="text-[11px] px-2 py-1 rounded-full bg-accent/10 text-accent-light border border-accent/20">
+                  Recommended now: {runnableMode === "quick" ? "Bronze" : runnableMode === "standard" ? "Silver" : "Gold"}
+                </span>
+              )}
               {(activeMission?.criticalErrorsCount ?? 0) > 0 && (
                 <span className="text-[11px] text-warn">
                   Blocker: {(activeMission?.criticalErrorsCount ?? 0)} critical errors

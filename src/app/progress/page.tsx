@@ -22,6 +22,10 @@ import { cn } from "@/lib/cn";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useMemo } from "react";
+import type {
+  ActiveMissionResult,
+  LearnerMission,
+} from "@/lib/missionTypes";
 
 const MODE_META: { mode: string; label: string; emoji: string; color: string }[] = [
   { mode: "quick", label: "Bronze", emoji: "🥉", color: "from-amber-700/20 to-amber-800/5 border-amber-600/30" },
@@ -57,20 +61,6 @@ const ERROR_CAT_LABELS: Record<string, string> = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyCard = Record<string, any>;
-
-interface ActiveMissionResult {
-  missionId: string;
-  title: string;
-  summary: string;
-}
-
-interface LearnerMission {
-  missionId: string;
-  active: boolean;
-  criticalErrorsCount?: number;
-  status: "not_started" | "active" | "paused" | "completed";
-  credits: { bronze: number; silver: number; gold: number };
-}
 
 function TrendIcon({ trend }: { trend: string }) {
   if (trend === "up") return <TrendingUp size={14} className="text-success" />;

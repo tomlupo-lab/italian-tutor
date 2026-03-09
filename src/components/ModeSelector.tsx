@@ -40,6 +40,7 @@ const MODES: {
   duration: string;
   description: string;
   color: string;
+  emptyHint: string;
 }[] = [
   {
     mode: "quick",
@@ -48,6 +49,7 @@ const MODES: {
     duration: "~5 min",
     description: "SRS flashcard review",
     color: "from-amber-700/20 to-amber-800/5 border-amber-600/30",
+    emptyHint: "No due cards or Bronze reviews yet",
   },
   {
     mode: "standard",
@@ -56,6 +58,7 @@ const MODES: {
     duration: "~10 min",
     description: "Cloze, drills, translation, error hunt",
     color: "from-slate-400/20 to-slate-500/5 border-slate-400/30",
+    emptyHint: "Complete lessons or recovery work to unlock drills",
   },
   {
     mode: "deep",
@@ -64,12 +67,14 @@ const MODES: {
     duration: "~15 min",
     description: "Conversation with Marco",
     color: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30",
+    emptyHint: "Conversation opens when Marco has a live scenario ready",
   },
 ];
 
 export default function ModeSelector({
   exerciseCounts,
   onSelect,
+  suggested,
   date,
 }: ModeSelectorProps) {
   const [scores, setScores] = useState<Record<string, TierScore | null>>({});
@@ -96,21 +101,24 @@ export default function ModeSelector({
         )}
       </div>
       <div className="space-y-2">
-        {MODES.map(({ mode, label, emoji, duration, description, color }) => {
+        {MODES.map(({ mode, label, emoji, duration, description, color, emptyHint }) => {
           const types = MODE_TYPES[mode];
           const count = types.reduce((sum, t) => sum + (exerciseCounts[t] ?? 0), 0);
           const score = scores[mode];
           const isCompleted = score?.completed ?? false;
+          const unavailable = count === 0;
+          const isSuggested = suggested === mode && !unavailable;
 
           return (
             <button
               key={mode}
               onClick={() => onSelect(mode)}
-              disabled={count === 0}
+              disabled={unavailable}
               className={cn(
                 "w-full text-left rounded-2xl border p-4 transition active:scale-[0.98]",
                 `bg-gradient-to-br ${color}`,
-                count === 0 && "opacity-40 cursor-not-allowed",
+                isSuggested && "ring-1 ring-accent/50 border-accent/40",
+                unavailable && "opacity-50 cursor-not-allowed",
               )}
             >
               <div className="flex items-center gap-3">
@@ -119,13 +127,20 @@ export default function ModeSelector({
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{label}</span>
                     <span className="text-xs text-white/40">{duration}</span>
+                    {isSuggested && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/20 text-accent-light">
+                        Recommended
+                      </span>
+                    )}
                     {isCompleted && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-success/20 text-success">
                         ✓ Done
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-white/40 mt-0.5">{description}</p>
+                  <p className="text-xs text-white/40 mt-0.5">
+                    {unavailable ? emptyHint : description}
+                  </p>
                   {score && score.bestScore > 0 && (
                     <div className="flex items-center gap-2 mt-1">
                       <Trophy size={10} className="text-yellow-400" />
@@ -134,8 +149,10 @@ export default function ModeSelector({
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                  <span className="text-sm text-white/40 tabular-nums">{count} ex</span>
-                  {isCompleted && <RotateCcw size={12} className="text-white/20" />}
+                  <span className="text-sm text-white/40 tabular-nums">
+                    {unavailable ? "Unavailable" : `${count} ex`}
+                  </span>
+                  {isCompleted ? <RotateCcw size={12} className="text-white/20" /> : isSuggested ? <span className="text-[10px] text-accent-light">Best next</span> : null}
                 </div>
               </div>
             </button>

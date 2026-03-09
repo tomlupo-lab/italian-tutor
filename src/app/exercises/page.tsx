@@ -10,6 +10,7 @@ import { Loader2, RefreshCw, Target, Shuffle, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { apiPath } from "@/lib/paths";
 import Link from "next/link";
+import { getTodayWarsaw } from "@/lib/date";
 
 type PracticeMode = "errors" | "random" | "typed";
 
@@ -25,6 +26,7 @@ const DRILL_TYPES: { type: string; label: string; emoji: string }[] = [
 ];
 
 export default function ExercisesPage() {
+  const today = getTodayWarsaw();
   const [mode, setMode] = useState<PracticeMode | null>(null);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [recoveryFocus, setRecoveryFocus] = useState(false);
@@ -232,9 +234,9 @@ export default function ExercisesPage() {
   if (!mode || (exercises.length === 0 && !loading)) {
     return (
       <main className="min-h-screen max-w-lg mx-auto px-4 py-6 space-y-4">
-        <h1 className="text-lg font-semibold text-center">Drills</h1>
+        <h1 className="text-lg font-semibold text-center">Practice Lab</h1>
         <p className="text-xs text-white/30 text-center">
-          Practice exercises on demand
+          Recovery drills, random replays, and fast access to Bronze
         </p>
 
         {(recoveryFocus || recentErrors.length > 0) && (
@@ -309,15 +311,15 @@ export default function ExercisesPage() {
           </button>
 
           <Link
-            href="/practice"
+            href={`/session/${today}?mode=quick`}
             className="w-full block text-left rounded-2xl border p-4 transition active:scale-[0.98] bg-gradient-to-br from-yellow-500/15 to-yellow-500/5 border-yellow-500/20"
           >
             <div className="flex items-center gap-3">
               <RefreshCw size={24} className="text-yellow-300 flex-shrink-0" />
               <div className="flex-1">
-                <span className="font-semibold">Cards (SRS)</span>
+                <span className="font-semibold">Bronze Session</span>
                 <p className="text-xs text-white/40 mt-0.5">
-                  Open spaced-repetition flashcards
+                  Start today&apos;s SRS review flow
                 </p>
               </div>
             </div>

@@ -253,6 +253,90 @@ const PATTERN_DRILLS: Array<{
   },
 ];
 
+
+// ── Speed Translation templates ─────────────────────────────────────
+const SPEED_TRANSLATION_BANK: Array<{
+  sentences: Array<{ source: string; options: [string, string, string, string]; correct: number }>;
+  time_limit: number;
+  tags: string[];
+}> = [
+  { sentences: [
+    { source: "I would like a coffee", options: ["Vorrei un caffè", "Voglio un caffè", "Ho un caffè", "Prendo caffè"], correct: 0 },
+    { source: "Where is the station?", options: ["Dov'è la stazione?", "Come è la stazione?", "Qual è la stazione?", "Quando è la stazione?"], correct: 0 },
+    { source: "How much does it cost?", options: ["Quanto costa?", "Come costa?", "Perché costa?", "Dove costa?"], correct: 0 },
+    { source: "I don't understand", options: ["Non capisco", "Non parlo", "Non sento", "Non vedo"], correct: 0 },
+    { source: "Can you help me?", options: ["Può aiutarmi?", "Può parlarmi?", "Può sentirmi?", "Può trovarmi?"], correct: 0 },
+  ], time_limit: 60, tags: ["general"] },
+  { sentences: [
+    { source: "The bill, please", options: ["Il conto, per favore", "Il menù, per favore", "Il piatto, per favore", "La carta, per favore"], correct: 0 },
+    { source: "I'd like to book a table", options: ["Vorrei prenotare un tavolo", "Vorrei comprare un tavolo", "Vorrei vedere un tavolo", "Vorrei pulire un tavolo"], correct: 0 },
+    { source: "What do you recommend?", options: ["Cosa consiglia?", "Cosa cucina?", "Cosa compra?", "Cosa mangia?"], correct: 0 },
+    { source: "Is service included?", options: ["Il servizio è incluso?", "Il coperto è pagato?", "La mancia è data?", "Il prezzo è fisso?"], correct: 0 },
+  ], time_limit: 60, tags: ["food"] },
+  { sentences: [
+    { source: "What time does the train leave?", options: ["A che ora parte il treno?", "Dove va il treno?", "Come è il treno?", "Quanto costa il treno?"], correct: 0 },
+    { source: "I need a return ticket", options: ["Ho bisogno di un biglietto andata e ritorno", "Voglio un biglietto solo andata", "Cerco un biglietto gratis", "Prendo un biglietto vecchio"], correct: 0 },
+    { source: "Which platform?", options: ["Quale binario?", "Quale treno?", "Quale stazione?", "Quale città?"], correct: 0 },
+    { source: "The flight is delayed", options: ["Il volo è in ritardo", "Il volo è cancellato", "Il volo è partito", "Il volo è arrivato"], correct: 0 },
+  ], time_limit: 60, tags: ["travel"] },
+  { sentences: [
+    { source: "I have a headache", options: ["Ho mal di testa", "Ho mal di pancia", "Ho mal di schiena", "Ho mal di denti"], correct: 0 },
+    { source: "I need a prescription", options: ["Ho bisogno di una ricetta", "Ho bisogno di una medicina", "Ho bisogno di un dottore", "Ho bisogno di un ospedale"], correct: 0 },
+    { source: "Do you have any allergies?", options: ["Ha qualche allergia?", "Ha qualche medicina?", "Ha qualche problema?", "Ha qualche dolore?"], correct: 0 },
+  ], time_limit: 60, tags: ["health"] },
+  { sentences: [
+    { source: "Can I try this on?", options: ["Posso provare questo?", "Posso comprare questo?", "Posso vedere questo?", "Posso tenere questo?"], correct: 0 },
+    { source: "Do you have a larger size?", options: ["Ha una taglia più grande?", "Ha un colore più grande?", "Ha un prezzo più grande?", "Ha uno sconto più grande?"], correct: 0 },
+    { source: "Do you accept cards?", options: ["Accettate carte?", "Accettate contanti?", "Accettate buoni?", "Accettate assegni?"], correct: 0 },
+  ], time_limit: 60, tags: ["shopping"] },
+  { sentences: [
+    { source: "What time is the meeting?", options: ["A che ora è la riunione?", "Dove è la riunione?", "Come è la riunione?", "Perché è la riunione?"], correct: 0 },
+    { source: "The project is on schedule", options: ["Il progetto è in orario", "Il progetto è in ritardo", "Il progetto è cancellato", "Il progetto è finito"], correct: 0 },
+  ], time_limit: 45, tags: ["work"] },
+  { sentences: [
+    { source: "What are you doing this weekend?", options: ["Cosa fai questo fine settimana?", "Dove vai questo fine settimana?", "Come stai questo fine settimana?", "Quando esci questo fine settimana?"], correct: 0 },
+    { source: "Happy birthday!", options: ["Buon compleanno!", "Buona fortuna!", "Buon viaggio!", "Buona notte!"], correct: 0 },
+    { source: "I had a great time", options: ["Mi sono divertito molto", "Mi sono annoiato molto", "Mi sono stancato molto", "Mi sono perso molto"], correct: 0 },
+  ], time_limit: 60, tags: ["social"] },
+  { sentences: [
+    { source: "I usually wake up at seven", options: ["Di solito mi sveglio alle sette", "Di solito mi addormento alle sette", "Di solito mangio alle sette", "Di solito esco alle sette"], correct: 0 },
+    { source: "I'm going grocery shopping", options: ["Vado a fare la spesa", "Vado a fare un viaggio", "Vado a fare una passeggiata", "Vado a fare il bagno"], correct: 0 },
+  ], time_limit: 45, tags: ["routine"] },
+];
+
+// ── Error Hunt templates ────────────────────────────────────────────
+const ERROR_HUNT_BANK: Array<{
+  sentences: Array<{ text: string; has_error: boolean; corrected?: string; explanation?: string }>;
+  focus: string[];
+}> = [
+  { sentences: [
+    { text: "Io parlo italiano molto bene.", has_error: false },
+    { text: "Lei va al scuola ogni giorno.", has_error: true, corrected: "Lei va a scuola ogni giorno.", explanation: "'andare a scuola' — no article needed" },
+    { text: "Noi mangiamo la pizza.", has_error: false },
+    { text: "Il ragazze sono brave.", has_error: true, corrected: "Le ragazze sono brave.", explanation: "'ragazze' is feminine plural → 'le'" },
+    { text: "Ho comprato un libro interessante.", has_error: false },
+  ], focus: ["article_gender_number", "preposition"] },
+  { sentences: [
+    { text: "Ieri sono andato al cinema.", has_error: false },
+    { text: "Maria ha andato a Roma.", has_error: true, corrected: "Maria è andata a Roma.", explanation: "'andare' takes essere; feminine → andata" },
+    { text: "Abbiamo mangiato bene.", has_error: false },
+    { text: "I bambini hanno uscito presto.", has_error: true, corrected: "I bambini sono usciti presto.", explanation: "'uscire' takes essere; plural → usciti" },
+    { text: "Ho letto un bel libro.", has_error: false },
+  ], focus: ["verb_tense", "verb_conjugation"] },
+  { sentences: [
+    { text: "Vorrei un caffè, per favore.", has_error: false },
+    { text: "Mi piacciono la pizza.", has_error: true, corrected: "Mi piace la pizza.", explanation: "Singular noun → piace (not piacciono)" },
+    { text: "Posso avere il conto?", has_error: false },
+    { text: "Voglio andare in il parco.", has_error: true, corrected: "Voglio andare nel parco.", explanation: "in + il = nel (articulated preposition)" },
+  ], focus: ["lexical_choice", "preposition"] },
+  { sentences: [
+    { text: "La mia amica è molto simpatica.", has_error: false },
+    { text: "Io ho bisogna di aiuto.", has_error: true, corrected: "Io ho bisogno di aiuto.", explanation: "'bisogno' is masculine noun, not 'bisogna'" },
+    { text: "Andiamo al ristorante stasera.", has_error: false },
+    { text: "Le scarpe è molto belle.", has_error: true, corrected: "Le scarpe sono molto belle.", explanation: "Plural subject → sono (not è)" },
+  ], focus: ["agreement", "lexical_choice"] },
+];
+
 // ── Conversation scenarios ──────────────────────────────────────────
 const CONVERSATION_BANK: Array<{
   scenario: string;
@@ -492,6 +576,29 @@ export const generateExercises = mutation({
       });
     }
 
+
+    // ── Speed translation (Silver) ──────────────────────────────
+    const relevantST = stableShuffle(
+      SPEED_TRANSLATION_BANK.filter((s) => s.tags.some((t) => mission.tags.includes(t)) || s.tags.includes("general")),
+      seed + "st",
+    );
+    const stCount = Math.min(mission.exerciseMix.speedTranslation, relevantST.length, 3);
+    for (let i = 0; i < stCount; i++) {
+      const t = relevantST[i];
+      rows.push({ date, type: "speed_translation", order: order++, content: { sentences: stableShuffle(t.sentences, seed + "sts" + i).slice(0, 5), time_limit_seconds: t.time_limit }, skillId: "vocab_core", missionId, tier: "standard", difficulty: mission.level, source: "seed", completed: false });
+    }
+
+    // ── Error hunt (Silver) ─────────────────────────────────────
+    const relevantEH = stableShuffle(
+      ERROR_HUNT_BANK.filter((e) => e.focus.some((f) => mission.errorFocus.includes(f))),
+      seed + "eh",
+    );
+    const ehCount = Math.min(mission.exerciseMix.errorHunt, relevantEH.length, 2);
+    for (let i = 0; i < ehCount; i++) {
+      const t = relevantEH[i];
+      rows.push({ date, type: "error_hunt", order: order++, content: { sentences: stableShuffle(t.sentences, seed + "ehs" + i) }, skillId: "grammar_forms", missionId, tier: "standard", difficulty: mission.level, source: "seed", completed: false });
+    }
+
     // ── Conversation (Gold) ─────────────────────────────────────
     const relevantConv = stableShuffle(
       CONVERSATION_BANK.filter((c) =>
@@ -577,6 +684,8 @@ export const generateExercises = mutation({
         cloze: rows.filter((r) => r.type === "cloze").length,
         word_builder: rows.filter((r) => r.type === "word_builder").length,
         pattern_drill: rows.filter((r) => r.type === "pattern_drill").length,
+        speed_translation: rows.filter((r) => r.type === "speed_translation").length,
+        error_hunt: rows.filter((r) => r.type === "error_hunt").length,
         conversation: rows.filter((r) => r.type === "conversation").length,
         reflection: rows.filter((r) => r.type === "reflection").length,
       },

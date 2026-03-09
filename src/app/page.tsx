@@ -15,32 +15,11 @@ import {
   pickRunnableMode,
   type InventoryStatusResult,
 } from "@/lib/inventoryStatus";
-
-interface ActiveMissionResult {
-  missionId: string;
-  level: "A1" | "A2" | "B1" | "B2";
-  status: "not_started" | "active" | "paused" | "completed";
-  title: string;
-  summary: string;
-}
-
-interface LearnerMission {
-  missionId: string;
-  active: boolean;
-  status: "not_started" | "active" | "paused" | "completed";
-  credits: { bronze: number; silver: number; gold: number };
-  criticalErrorsCount?: number;
-}
-
-interface CatalogMission {
-  missionId: string;
-  title: string;
-  exerciseTargets: {
-    bronzeReviews: number;
-    silverDrills: number;
-    goldConversations: number;
-  };
-}
+import type {
+  ActiveMissionResult,
+  CatalogMission,
+  LearnerMission,
+} from "@/lib/missionTypes";
 
 const MODE_LABEL: Record<ExerciseMode, string> = {
   quick: "Bronze",
@@ -188,21 +167,22 @@ export default function Home() {
           </ul>
         </div>
         <p className="text-xs text-white/30">
-          Start a mission below to unlock adaptive exercises tailored to your level.
-          {hasDueCards && " Meanwhile, try some flashcard practice!"}
+          Marco will unlock fresh practice as your mission and review queue fill in.
+          {hasDueCards && " Meanwhile, start a Bronze session."}
         </p>
-        <Link
-            href="/missions"
-            className="px-6 py-3 bg-accent rounded-xl text-sm font-medium"
-          >
-            Start Your First Mission
-          </Link>
-        {hasDueCards && (
+        {hasDueCards ? (
           <Link
             href={`/session/${today}?mode=quick`}
+            className="px-6 py-3 bg-accent rounded-xl text-sm font-medium"
+          >
+            Start Bronze session ({dueCards?.length ?? 0} due)
+          </Link>
+        ) : (
+          <Link
+            href="/progress"
             className="px-6 py-3 bg-card rounded-xl border border-white/10 text-sm"
           >
-            Review SRS cards ({dueCards?.length ?? 0} due)
+            View Progress
           </Link>
         )}
       </main>
@@ -236,7 +216,7 @@ export default function Home() {
 
       {/* Today's date header */}
       <div className="text-center">
-        <p className="text-xs text-white/30">{new Date(today + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "Europe/Warsaw" })}</p>
+        <p className="text-xs text-white/30">{today}</p>
         <h1 className="text-lg font-semibold mt-0.5">
           {totalExercises > 0
             ? `${totalExercises} exercises ready`
@@ -325,6 +305,7 @@ export default function Home() {
           <ModeSelector
             exerciseCounts={exerciseCounts}
             onSelect={handleModeSelect}
+            suggested={runnableRecommendedMode ?? undefined}
           />
         </section>
       ) : (
@@ -333,30 +314,12 @@ export default function Home() {
           <p className="text-xs text-white/30">
             Marco adapts new practice from your mission progress, errors, and due reviews.
           </p>
-          {activeMission?.missionId && !generating && (
-            <button
-              onClick={() => {
-                setGenerating(true);
-                generatedRef.current = null;
-                generateExercises({ date: today, missionId: activeMission.missionId })
-                  .then((r) => console.log("Manual generation:", r))
-                  .catch((e) => console.error("Generation failed:", e))
-                  .finally(() => setGenerating(false));
-              }}
-              className="mt-2 px-4 py-2 bg-accent/20 rounded-xl text-sm text-accent-light border border-accent/30"
-            >
-              Generate exercises
-            </button>
-          )}
-          {generating && (
-            <p className="text-xs text-accent-light animate-pulse">Generating...</p>
-          )}
           {hasDueCards && (
             <Link
               href={`/session/${today}?mode=quick`}
               className="mt-3 inline-block px-4 py-2 bg-accent rounded-xl text-sm font-medium"
             >
-              Review SRS cards ({dueCards?.length ?? 0} due)
+              Start Bronze session ({dueCards?.length ?? 0} due)
             </Link>
           )}
         </div>

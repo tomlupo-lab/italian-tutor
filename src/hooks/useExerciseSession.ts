@@ -7,6 +7,9 @@ import { getTodayWarsaw } from "@/lib/date";
 import { triggerAnswerFeedback } from "@/lib/feedback";
 import { normalizeContent } from "@/lib/normalizeContent";
 import { apiPath } from "@/lib/paths";
+import { resultScore, summarizeResults } from "@/lib/exerciseResults";
+import { computeExerciseEvidenceEntries, computeSessionSkillImpact } from "@/lib/sessionSkillImpact";
+import sessionContracts from "@/lib/sessionContracts";
 import type {
   ClozeContent,
   ErrorHuntContent,
@@ -51,8 +54,7 @@ interface CorrectionCard {
 }
 
 const TIER_KEY = "italian-tutor-tier-scores";
-const DRILL_TYPES = new Set(["cloze", "word_builder", "pattern_drill", "speed_translation", "error_hunt"]);
-const GOLD_TYPES = new Set(["conversation", "reflection"]);
+const { computeTierCredits, evaluateGoldContract } = sessionContracts;
 
 function buildSessionSignature(exercises: Exercise[], mode: ExerciseMode): string {
   const typeCounts = new Map<string, number>();
@@ -70,30 +72,7 @@ function buildSessionSignature(exercises: Exercise[], mode: ExerciseMode): strin
   return `${mode}|${fingerprint || "empty"}|ids:${idFingerprint || "none"}`;
 }
 
-function mapExerciseTypeToSkills(type: Exercise["type"]): string[] {
-  switch (type) {
-    case "srs":
-      return ["vocab_core"];
-    case "cloze":
-      return ["grammar_forms", "grammar_syntax"];
-    case "word_builder":
-      return ["grammar_syntax", "writing_micro"];
-    case "pattern_drill":
-      return ["grammar_forms", "speaking_accuracy"];
-    case "speed_translation":
-      return ["vocab_core", "listening_literal"];
-    case "error_hunt":
-      return ["reading_comprehension", "grammar_syntax"];
-    case "conversation":
-      return ["speaking_fluency", "speaking_accuracy", "pragmatics", "task_completion"];
-    case "reflection":
-      return ["writing_micro", "task_completion"];
-    default:
-      return ["task_completion"];
-  }
-}
-
-function mapErrorCategoryToKey(category?: string): string {
+function mapErrorCategoryToKey(category?: string): string | null {
   switch (category) {
     case "cloze":
       return "verb_conjugation";
@@ -107,45 +86,11 @@ function mapErrorCategoryToKey(category?: string): string {
       return "agreement";
     case "conversation":
       return "incomplete_response";
+    case "srs_review":
+      return null;
     default:
       return "instruction_misread";
   }
-}
-
-function resultScore(result: ExerciseResult): number {
-  if (hasCorrectFlag(result)) {
-    return result.correct ? 1 : 0;
-  }
-  if (hasScores(result)) {
-    const scores = result.scores;
-    if (scores.length === 0) return 0.5;
-    const ok = scores.filter(Boolean).length;
-    return ok / scores.length;
-  }
-  if (hasTotalCorrect(result)) {
-    const total = Math.max(1, result.answers?.length ?? 10);
-    return Math.max(0, Math.min(1, result.total_correct / total));
-  }
-  if (hasRating(result)) {
-    return Math.max(0, Math.min(1, result.rating / 5));
-  }
-  return 0.5;
-}
-
-function hasCorrectFlag(result: ExerciseResult): result is ExerciseResult & { correct: boolean } {
-  return "correct" in result && typeof result.correct === "boolean";
-}
-
-function hasScores(result: ExerciseResult): result is ExerciseResult & { scores: boolean[] } {
-  return "scores" in result && Array.isArray(result.scores);
-}
-
-function hasTotalCorrect(result: ExerciseResult): result is ExerciseResult & { total_correct: number; answers?: number[] } {
-  return "total_correct" in result && typeof result.total_correct === "number";
-}
-
-function hasRating(result: ExerciseResult): result is ExerciseResult & { rating: number } {
-  return "rating" in result && typeof result.rating === "number";
 }
 
 function getConversationErrors(result: ExerciseResult) {
@@ -352,6 +297,134 @@ interface UseExerciseSessionOptions {
   date?: string;
 }
 
+function extractSessionErrors(
+  exercises: Exercise[],
+  resultMap: Map<string, ExerciseResult>,
+) {
+  const errors: Array<{
+    original: string;
+    corrected: string;
+    explanation?: string;
+    category?: string;
+    skillId?: string;
+  }> = [];
+
+  for (const [id, result] of resultMap) {
+    const ex = exercises.find((e) => e._id === id);
+    if (!ex) continue;
+    const content = normalizeContent(ex.type, ex.content);
+
+    switch (ex.type) {
+      case "srs": {
+        const r = result as { quality?: number };
+        const c = getSrsText(ex.content);
+        if (r.quality === 0 && c?.front && c.back) {
+          errors.push({
+            original: c.front,
+            corrected: c.back,
+            explanation: "Marked Again for extra SRS review",
+            category: "srs_review",
+            skillId: ex.skillId,
+          });
+        }
+        break;
+      }
+      case "cloze": {
+        const c = content as ClozeContent;
+        const r = result as { selected: number; correct: boolean };
+        if (!r.correct && c.sentence) {
+          errors.push({
+            original: c.options[r.selected],
+            corrected: c.options[c.correct],
+            explanation: c.hint,
+            category: "cloze",
+            skillId: ex.skillId,
+          });
+        }
+        break;
+      }
+      case "word_builder": {
+        const c = content as WordBuilderContent;
+        const r = result as WordBuilderResult;
+        if (!r.correct && c.target_sentence) {
+          errors.push({
+            original: "wrong order",
+            corrected: c.target_sentence,
+            explanation: c.translation,
+            category: "word_order",
+            skillId: ex.skillId,
+          });
+        }
+        break;
+      }
+      case "pattern_drill": {
+        const c = content as PatternDrillContent;
+        const r = result as PatternDrillResult;
+        if (c?.sentences && r?.scores) {
+          r.scores.forEach((correct, i) => {
+            if (!correct && c.sentences[i]) {
+              const s = c.sentences[i];
+              errors.push({
+                original: s.blank || "wrong",
+                corrected: s.correct,
+                explanation: s.hint || c.pattern_name,
+                category: "grammar_pattern",
+                skillId: ex.skillId,
+              });
+            }
+          });
+        }
+        break;
+      }
+      case "speed_translation": {
+        const c = content as SpeedTranslationContent;
+        const r = result as SpeedTranslationResult;
+        if (c?.sentences && r?.scores) {
+          r.scores.forEach((correct, i) => {
+            if (!correct && c.sentences[i]) {
+              const s = c.sentences[i];
+              errors.push({
+                original: s.source,
+                corrected: s.options[s.correct],
+                category: "translation",
+                skillId: ex.skillId,
+              });
+            }
+          });
+        }
+        break;
+      }
+      case "error_hunt": {
+        const c = content as ErrorHuntContent;
+        const r = result as ErrorHuntResult;
+        if (c?.sentences && r?.scores) {
+          r.scores.forEach((correct, i) => {
+            if (!correct && c.sentences[i]?.has_error && c.sentences[i].corrected) {
+              const s = c.sentences[i];
+              errors.push({
+                original: s.text,
+                corrected: s.corrected!,
+                explanation: s.explanation,
+                category: "error_recognition",
+                skillId: ex.skillId,
+              });
+            }
+          });
+        }
+        break;
+      }
+      case "conversation": {
+        for (const err of getConversationErrors(result)) {
+          errors.push({ ...err, category: "conversation", skillId: ex.skillId });
+        }
+        break;
+      }
+    }
+  }
+
+  return errors;
+}
+
 export function useExerciseSession({
   exercises,
   mode,
@@ -373,137 +446,38 @@ export function useExerciseSession({
     new Map(),
   );
   const resultsRef = useRef<Map<string, ExerciseResult>>(new Map());
+  const submittedExerciseIds = useRef<Set<string>>(new Set());
+  const [finalResults, setFinalResults] = useState<Map<string, ExerciseResult> | null>(null);
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [missionCompleted, setMissionCompleted] = useState(false);
+  const sessionExercisesRef = useRef(exercises);
+  const sessionExercises = sessionExercisesRef.current;
 
-  const total = exercises.length;
-  const currentExercise = exercises[current] ?? null;
+  const total = sessionExercises.length;
+  const currentExercise = sessionExercises[current] ?? null;
   const progress = total > 0 ? (current / total) * 100 : 0;
+  const visibleResults = finalResults ?? results;
 
   /** Errors extracted from exercise results — all drill types */
-  const sessionErrors = useMemo(() => {
-    const errors: Array<{
-      original: string;
-      corrected: string;
-      explanation?: string;
-      category?: string;
-      skillId?: string;
-    }> = [];
-    for (const [id, result] of results) {
-      const ex = exercises.find((e) => e._id === id);
-      if (!ex) continue;
-      const content = normalizeContent(ex.type, ex.content);
-
-      switch (ex.type) {
-        case "cloze": {
-          const c = content as ClozeContent;
-          const r = result as { selected: number; correct: boolean };
-          if (!r.correct && c.sentence) {
-            errors.push({
-              original: c.options[r.selected],
-              corrected: c.options[c.correct],
-              explanation: c.hint,
-              category: "cloze",
-              skillId: ex.skillId,
-            });
-          }
-          break;
-        }
-        case "word_builder": {
-          const c = content as WordBuilderContent;
-          const r = result as WordBuilderResult;
-          if (!r.correct && c.target_sentence) {
-            errors.push({
-              original: "wrong order",
-              corrected: c.target_sentence,
-              explanation: c.translation,
-              category: "word_order",
-              skillId: ex.skillId,
-            });
-          }
-          break;
-        }
-        case "pattern_drill": {
-          const c = content as PatternDrillContent;
-          const r = result as PatternDrillResult;
-          if (c?.sentences && r?.scores) {
-            r.scores.forEach((correct, i) => {
-              if (!correct && c.sentences[i]) {
-                const s = c.sentences[i];
-                errors.push({
-                  original: s.blank || "wrong",
-                  corrected: s.correct,
-                  explanation: s.hint || c.pattern_name,
-                  category: "grammar_pattern",
-                  skillId: ex.skillId,
-                });
-              }
-            });
-          }
-          break;
-        }
-        case "speed_translation": {
-          const c = content as SpeedTranslationContent;
-          const r = result as SpeedTranslationResult;
-          if (c?.sentences && r?.scores) {
-            r.scores.forEach((correct, i) => {
-              if (!correct && c.sentences[i]) {
-                const s = c.sentences[i];
-                errors.push({
-                  original: s.source,
-                  corrected: s.options[s.correct],
-                  category: "translation",
-                  skillId: ex.skillId,
-                });
-              }
-            });
-          }
-          break;
-        }
-        case "error_hunt": {
-          const c = content as ErrorHuntContent;
-          const r = result as ErrorHuntResult;
-          if (c?.sentences && r?.scores) {
-            r.scores.forEach((correct, i) => {
-              if (!correct && c.sentences[i]?.has_error && c.sentences[i].corrected) {
-                const s = c.sentences[i];
-                errors.push({
-                  original: s.text,
-                  corrected: s.corrected!,
-                  explanation: s.explanation,
-                  category: "error_recognition",
-                  skillId: ex.skillId,
-                });
-              }
-            });
-          }
-          break;
-        }
-        case "conversation": {
-          for (const err of getConversationErrors(result)) {
-            errors.push({ ...err, category: "conversation", skillId: ex.skillId });
-          }
-          break;
-        }
-      }
-    }
-    return errors;
-  }, [results, exercises]);
+  const sessionErrors = useMemo(
+    () => extractSessionErrors(sessionExercises, visibleResults),
+    [sessionExercises, visibleResults],
+  );
 
   /** Record a result for the current exercise and advance */
   const submitResult = useCallback(
     async (result: ExerciseResult) => {
       if (!currentExercise) return;
+      if (submittedExerciseIds.current.has(currentExercise._id)) return;
+      submittedExerciseIds.current.add(currentExercise._id);
 
       // Store result locally
-      setResults((prev) => {
-        const next = new Map(prev);
-        next.set(currentExercise._id, result);
-        return next;
-      });
-      resultsRef.current.set(currentExercise._id, result);
+      const nextResults = new Map(resultsRef.current);
+      nextResults.set(currentExercise._id, result);
+      resultsRef.current = nextResults;
+      setResults(nextResults);
       const feedbackScore = resultScore(result);
       triggerAnswerFeedback(
         currentExercise.type === "srs"
@@ -563,27 +537,10 @@ export function useExerciseSession({
           const totalMinutes = Math.round(elapsed / 60000);
 
           // Compute rating from results
-          let correctCount = 0;
-          let totalItems = 0;
-          const allResults = new Map(resultsRef.current);
-          allResults.set(currentExercise._id, result);
-
-          for (const r of allResults.values()) {
-            if (hasCorrectFlag(r)) {
-              totalItems++;
-              if (r.correct) correctCount++;
-            } else if (hasScores(r)) {
-              for (const s of r.scores) {
-                totalItems++;
-                if (s) correctCount++;
-              }
-            } else if (hasTotalCorrect(r)) {
-              totalItems += 10;
-              correctCount += r.total_correct;
-            }
-          }
-
-          const pct = totalItems > 0 ? correctCount / totalItems : 0.5;
+          const allResults = new Map(nextResults);
+          setFinalResults(allResults);
+          const { accuracy, totalItems } = summarizeResults(allResults.values());
+          const pct = totalItems > 0 ? accuracy : 0.5;
           const rating = Math.round(pct * 4) + 1; // 1-5
 
           const saveResult = await saveSession({
@@ -604,26 +561,25 @@ export function useExerciseSession({
           persistTierScore(sessionDate, mode, Math.round(pct * 100));
 
           // Mission progression update (non-blocking but awaited to keep state consistent)
-          const skillMap = new Map<string, number>();
-          let bronzeCredit = 0;
-          let silverCredit = 0;
-          let goldCredit = 0;
-          for (const ex of exercises) {
-            const r = allResults.get(ex._id);
-            if (!r) continue;
-            const score = resultScore(r);
-            const points = Math.max(1, Math.round(score * 10));
-            for (const skill of mapExerciseTypeToSkills(ex.type)) {
-              skillMap.set(skill, (skillMap.get(skill) ?? 0) + points);
-            }
-            if (ex.type === "srs") bronzeCredit += 1;
-            if (DRILL_TYPES.has(ex.type)) silverCredit += 1;
-            if (GOLD_TYPES.has(ex.type)) goldCredit += 1;
-          }
+          const sessionSkillImpact = computeSessionSkillImpact(sessionExercises, allResults);
+          const { bronzeCredit, silverCredit, goldCredit } = computeTierCredits(
+            sessionExercises,
+            allResults,
+          );
+          const goldContract =
+            mode === "deep"
+              ? evaluateGoldContract(sessionExercises, allResults)
+              : null;
+          const goldContractStatus = goldContract?.contractStatus as
+            | "strong"
+            | "partial"
+            | "missed"
+            | undefined;
 
           const errorMap = new Map<string, number>();
           for (const err of sessionErrors) {
             const key = mapErrorCategoryToKey(err.category);
+            if (!key) continue;
             errorMap.set(key, (errorMap.get(key) ?? 0) + 1);
           }
 
@@ -634,6 +590,7 @@ export function useExerciseSession({
             try {
               const sessionSignature = buildSessionSignature(exercises, mode);
               const missionResult = await recordMissionCompletion({
+                sessionId: saveResult.id,
                 sessionDate,
                 scorePercent: Math.round(pct * 100),
                 bronzeCredit,
@@ -642,11 +599,16 @@ export function useExerciseSession({
                 minutes: totalMinutes,
                 sessionSignature,
                 criticalErrors,
+                goldCheckpointPassed: goldContract?.checkpointPassed,
+                goldContractStatus,
                 confidenceWeight: Math.min(1, Math.max(0.25, allResults.size / 20)),
-                skillDeltas: Array.from(skillMap.entries()).map(([skillKey, points]) => ({
-                  skillKey,
-                  points,
+                skillDeltas: sessionSkillImpact.skills.map((skill) => ({
+                  skillKey: skill.skillKey,
+                  points: skill.points,
+                  evidenceCount: skill.evidenceCount,
+                  proficiencySample: skill.proficiencySample,
                 })),
+                evidenceEntries: computeExerciseEvidenceEntries(sessionExercises, allResults),
                 errorDeltas: Array.from(errorMap.entries()).map(([errorKey, count]) => ({
                   errorKey,
                   count,
@@ -656,6 +618,12 @@ export function useExerciseSession({
                 sessionId: saveResult.id,
                 missionId: missionResult.missionId,
                 checkpointAwardedId: missionResult.checkpointAwardedId ?? undefined,
+                checkpointPassed: missionResult.checkpointPassed,
+                goldContractStatus: missionResult.goldContractStatus as
+                  | "strong"
+                  | "partial"
+                  | "missed"
+                  | undefined,
                 duplicatePenaltyApplied: missionResult.duplicateSameDay,
                 appliedCredits: missionResult.appliedCredits,
               });
@@ -670,7 +638,7 @@ export function useExerciseSession({
           if (saveResult.status === "created") {
             // Extract correction cards from wrong answers and add to SRS deck.
             // Skip on duplicate save retries to avoid duplicate correction cards.
-            const correctionCards = extractCorrectionCards(exercises, allResults);
+            const correctionCards = extractCorrectionCards(sessionExercises, allResults);
             if (correctionCards.length > 0) {
               bulkAddCards({ cards: correctionCards })
                 .then(() => {
@@ -700,7 +668,7 @@ export function useExerciseSession({
       total,
         results,
         resultsRef,
-      exercises,
+      sessionExercises,
       markComplete,
       saveSession,
       attachMissionOutcome,
@@ -709,8 +677,8 @@ export function useExerciseSession({
       recordMissionCompletion,
       mode,
       date,
-      sessionErrors,
-    ],
+    sessionErrors,
+  ],
   );
 
   /** Skip to next exercise without recording a result */
@@ -727,10 +695,11 @@ export function useExerciseSession({
     total,
     progress,
     currentExercise,
+    sessionExercises,
     done,
     saving,
     error,
-    results,
+    results: visibleResults,
     resultsRef,
     sessionErrors,
     missionCompleted,

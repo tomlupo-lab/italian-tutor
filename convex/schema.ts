@@ -68,6 +68,10 @@ export default defineSchema({
     reflectionAnswer: v.optional(v.string()),
     missionId: v.optional(v.string()),
     checkpointAwardedId: v.optional(v.string()),
+    checkpointPassed: v.optional(v.boolean()),
+    goldContractStatus: v.optional(
+      v.union(v.literal("strong"), v.literal("partial"), v.literal("missed"))
+    ),
     appliedCredits: v.optional(
       v.object({
         bronze: v.number(),
@@ -79,6 +83,30 @@ export default defineSchema({
   })
     .index("by_date", ["date"])
     .index("by_client_session", ["clientSessionId"]),
+
+  exerciseEvidence: defineTable({
+    sessionId: v.id("sessions"),
+    learnerId: v.string(),
+    sessionDate: v.string(),
+    missionId: v.optional(v.string()),
+    exerciseId: v.string(),
+    exerciseType: v.string(),
+    skillKey: v.string(),
+    evidenceType: v.union(
+      v.literal("srs"),
+      v.literal("drill"),
+      v.literal("conversation"),
+      v.literal("reflection")
+    ),
+    rawScore: v.number(), // 0..1
+    weight: v.number(),
+    pointsDelta: v.number(),
+    proficiencyDelta: v.number(), // signed delta applied from this evidence row
+    createdAt: v.number(),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_learner_skill", ["learnerId", "skillKey"])
+    .index("by_learner_date", ["learnerId", "sessionDate"]),
 
   // ── SRS Cards (enhanced with skill tracking) ─────────────────────
   cards: defineTable({
@@ -100,8 +128,8 @@ export default defineSchema({
     nextReview: v.string(), // YYYY-MM-DD
     lastQuality: v.optional(v.number()), // 1-5
     lastReviewed: v.optional(v.string()),
-    // New: milestone integration
-    skillId: v.optional(v.string()), // ties card to milestone skill
+    // Optional skill linkage for progression tracking
+    skillId: v.optional(v.string()),
     errorCategory: v.optional(v.string()), // grammar/vocab/preposition/construction
   })
     .index("by_next_review", ["nextReview"])
@@ -109,20 +137,28 @@ export default defineSchema({
     .index("by_level", ["level"])
     .index("by_it", ["it"]),
 
-  // ── Milestones (read replica from quark.db) ──────────────────────
-  milestones: defineTable({
-    skillId: v.string(),
-    name: v.string(),
-    level: v.string(),
-    category: v.string(),
-    rating: v.number(),
-    lastAssessed: v.optional(v.string()),
+  missionExerciseLibrary: defineTable({
+    missionId: v.string(),
+    level: v.union(
+      v.literal("A1"),
+      v.literal("A2"),
+      v.literal("B1"),
+      v.literal("B2")
+    ),
+    type: v.string(),
+    tier: v.union(v.literal("quick"), v.literal("standard"), v.literal("deep")),
+    order: v.number(),
+    title: v.optional(v.string()),
+    checkpointId: v.optional(v.string()),
+    skillId: v.optional(v.string()),
+    tags: v.array(v.string()),
+    errorFocus: v.array(v.string()),
+    variantKey: v.string(),
+    content: v.any(),
     active: v.boolean(),
-    updatedAt: v.number(), // epoch ms for sync tracking
   })
-    .index("by_skill", ["skillId"])
-    .index("by_level", ["level"])
-    .index("by_category", ["category"]),
+    .index("by_mission_order", ["missionId", "order"])
+    .index("by_mission_type", ["missionId", "type"]),
 
   // ── Mission progression catalog (author-defined) ──────────────────
   missionCatalog: defineTable({
@@ -266,6 +302,15 @@ export default defineSchema({
     totalScore: v.number(),
     averageScore: v.number(),
     criticalErrorsCount: v.number(),
+    skillBlockers: v.optional(
+      v.array(
+        v.object({
+          skillKey: v.string(),
+          weakEvidenceCount: v.number(),
+          rollingErrorRate: v.number(),
+        })
+      )
+    ),
     skillPoints: v.array(
       v.object({
         skillKey: v.string(),
@@ -297,7 +342,12 @@ export default defineSchema({
     learnerId: v.string(),
     skillKey: v.string(),
     points: v.number(),
-    confidence: v.number(), // 0..1
+    proficiency: v.optional(v.number()), // 0..100
+    confidence: v.optional(v.number()), // 0..1
+    evidenceCount: v.optional(v.number()),
+    recentWeakEvidence: v.optional(v.number()),
+    recentStrongEvidence: v.optional(v.number()),
+    rollingErrorRate: v.optional(v.number()), // 0..1 over recent evidence
     lastUpdated: v.number(),
   })
     .index("by_learner_skill", ["learnerId", "skillKey"])

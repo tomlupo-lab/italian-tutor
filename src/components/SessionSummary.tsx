@@ -13,14 +13,22 @@ import {
   Target,
   Zap,
 } from "lucide-react";
-import { cn } from "@/lib/cn";
 import type { ExerciseMode } from "@/lib/exerciseTypes";
 import Link from "next/link";
+import { prettySkillLabel } from "@/lib/labels";
+import type { SessionSkillImpact } from "@/lib/sessionSkillImpact";
+import {
+  computeSkillBandReadiness,
+  describeCurrentBand,
+  describeNextTarget,
+  getSkillBandStatus,
+} from "@/lib/skillBands";
 import type {
   ActiveMissionResult,
   CatalogMission,
   LearnerLevel,
   LearnerMission,
+  LearnerSkill,
 } from "@/lib/missionTypes";
 
 interface SessionSummaryProps {
@@ -28,7 +36,9 @@ interface SessionSummaryProps {
   exercisesCompleted: number;
   correctCount: number;
   errorsCount: number;
+  accuracyPercent: number;
   sessionDate?: string;
+  sessionSkillImpact?: SessionSkillImpact | null;
 }
 
 const MODE_LABELS: Record<string, { label: string; emoji: string }> = {
@@ -36,15 +46,6 @@ const MODE_LABELS: Record<string, { label: string; emoji: string }> = {
   standard: { label: "Silver", emoji: "🥈" },
   deep: { label: "Gold", emoji: "🥇" },
 };
-
-interface Milestone {
-  skillId: string;
-  name: string;
-  level: string;
-  category: string;
-  rating: number;
-  active: boolean;
-}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyCard = Record<string, any>;
@@ -55,6 +56,8 @@ interface RecentSessionOutcome {
   mode?: string;
   missionId?: string;
   checkpointAwardedId?: string;
+  checkpointPassed?: boolean;
+  goldContractStatus?: "strong" | "partial" | "missed";
   duplicatePenaltyApplied?: boolean;
   appliedCredits?: { bronze: number; silver: number; gold: number };
   _creationTime?: number;
@@ -65,17 +68,18 @@ export default function SessionSummary({
   exercisesCompleted,
   correctCount,
   errorsCount,
+  accuracyPercent,
   sessionDate,
+  sessionSkillImpact,
 }: SessionSummaryProps) {
   const effectiveDate = sessionDate ?? getTodayWarsaw();
-  const milestones = useQuery(api.milestones.getAll) as Milestone[] | undefined;
   const allCards = useQuery(api.cards.getAll) as AnyCard[] | undefined;
   const recentSessions = useQuery(api.sessions.listRecent, { limit: 30 }) as
     | RecentSessionOutcome[]
     | undefined;
   const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
   const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
-    | { missions: LearnerMission[]; level?: LearnerLevel | null }
+    | { missions: LearnerMission[]; skills?: LearnerSkill[]; level?: LearnerLevel | null }
     | undefined;
   const missionCatalog = useQuery(api.missions.listCatalog, {}) as
     | { missions: CatalogMission[] }
@@ -90,27 +94,6 @@ export default function SessionSummary({
       (c) => c.source === "correction" && (c._creationTime ?? 0) > twoMinAgo,
     ).length;
   }, [allCards]);
-
-  // ── Skills touched (from exercises' skillIds) ─────────────────────
-  const skillProgress = useMemo(() => {
-    if (!milestones) return [];
-    const active = milestones.filter((m) => m.active);
-    // Show A2 skills that are still being worked on (rating < 3)
-    const a2Working = active
-      .filter((m) => m.level === "A2" && m.rating < 3)
-      .sort((a, b) => b.rating - a.rating)
-      .slice(0, 4);
-    return a2Working;
-  }, [milestones]);
-
-  // ── A2 mastery progress ───────────────────────────────────────────
-  const a2Mastery = useMemo(() => {
-    if (!milestones) return null;
-    const a2 = milestones.filter((m) => m.level === "A2" && m.active);
-    if (!a2.length) return null;
-    const mastered = a2.filter((m) => m.rating >= 2).length;
-    return { mastered, total: a2.length, pct: Math.round((mastered / a2.length) * 100) };
-  }, [milestones]);
 
   // ── Weekly trend ──────────────────────────────────────────────────
   const weekTrend = useMemo(() => {
@@ -148,8 +131,45 @@ export default function SessionSummary({
     );
   }, [effectiveDate, mode, recentSessions]);
 
+  const missionSkillSummary = useMemo(() => {
+    if (!sessionSkillImpact || sessionSkillImpact.skills.length === 0) return null;
+    const skillStates = new Map((learnerProgress?.skills ?? []).map((row) => [row.skillKey, row] as const));
+    const topPoints = Math.max(...sessionSkillImpact.skills.map((row) => row.points), 1);
+    const topSkills = sessionSkillImpact.skills.slice(0, 4).map((row) => {
+      const skillState = skillStates.get(row.skillKey);
+      const totalPoints = skillState?.points ?? row.points;
+      const status = getSkillBandStatus(row.skillKey, totalPoints);
+      const targetBand = status.nextBand ?? status.currentBand ?? "A1";
+      const readiness = computeSkillBandReadiness(row.skillKey, targetBand, {
+        points: totalPoints,
+        proficiency: skillState?.proficiency ?? row.proficiencySample,
+        confidence: skillState?.confidence ?? 0,
+        evidenceCount: skillState?.evidenceCount ?? row.evidenceCount,
+      });
+      return {
+        skillKey: row.skillKey,
+        label: prettySkillLabel(row.skillKey) ?? row.skillKey,
+        pointsGained: row.points,
+        totalPoints,
+        currentBand: describeCurrentBand(row.skillKey, totalPoints),
+        nextTarget: describeNextTarget(row.skillKey, totalPoints),
+        nextProgressPct: readiness?.readinessScore ?? status.progressToNextPct,
+        proficiency: skillState?.proficiency ?? row.proficiencySample,
+        confidence: Math.round((skillState?.confidence ?? 0) * 100),
+        evidenceCount: skillState?.evidenceCount ?? row.evidenceCount,
+        readiness,
+        pct: Math.max(10, Math.round((row.points / topPoints) * 100)),
+      };
+    });
+    return {
+      totalSkills: sessionSkillImpact.skills.length,
+      totalPoints: sessionSkillImpact.totalPoints,
+      exercisesContributing: sessionSkillImpact.exercisesContributing,
+      topSkills,
+    };
+  }, [learnerProgress?.skills, sessionSkillImpact]);
+
   // ── Session score ─────────────────────────────────────────────────
-  const accuracy = exercisesCompleted > 0 ? Math.round((correctCount / exercisesCompleted) * 100) : 0;
   const modeInfo = MODE_LABELS[mode] ?? { label: mode, emoji: "📝" };
   const levelMissionStats = useMemo(() => {
     const level = learnerProgress?.level?.currentLevel;
@@ -173,7 +193,7 @@ export default function SessionSummary({
           </div>
           <div className="flex items-center gap-1.5">
             <Zap size={14} className="text-accent-light" />
-            <span className="text-lg font-bold text-accent-light">{accuracy}%</span>
+            <span className="text-lg font-bold text-accent-light">{accuracyPercent}%</span>
           </div>
         </div>
 
@@ -194,45 +214,68 @@ export default function SessionSummary({
         </div>
       </div>
 
-      {/* Skills Progress */}
-      {a2Mastery && (
+      {/* Mission Skills */}
+      {missionSkillSummary && (
         <div className="bg-card rounded-xl border border-white/10 p-4 space-y-2">
           <div className="flex items-center gap-2 mb-1">
             <Target size={14} className="text-accent-light" />
-            <span className="text-xs font-medium text-white/60">A2 Skill Mastery</span>
-            <span className="ml-auto text-xs text-white/30">{a2Mastery.pct}%</span>
-          </div>
-          {/* Progress bar */}
-          <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-accent rounded-full transition-all duration-700"
-              style={{ width: `${a2Mastery.pct}%` }}
-            />
+            <span className="text-xs font-medium text-white/60">Skills Improved This Session</span>
+            <span className="ml-auto text-xs text-white/30">
+              {missionSkillSummary.totalSkills} skills
+            </span>
           </div>
           <p className="text-[10px] text-white/30">
-            {a2Mastery.mastered}/{a2Mastery.total} skills at level 2+
+            {mode === "quick"
+              ? `${missionSkillSummary.exercisesContributing} reviewed card${missionSkillSummary.exercisesContributing === 1 ? "" : "s"} generated ${missionSkillSummary.totalPoints} vocabulary-weighted skill points.`
+              : `${missionSkillSummary.exercisesContributing} completed exercise${missionSkillSummary.exercisesContributing === 1 ? "" : "s"} generated ${missionSkillSummary.totalPoints} total skill points.`}
           </p>
-
-          {/* Individual skill bars */}
-          {skillProgress.length > 0 && (
-            <div className="space-y-1.5 mt-2 pt-2 border-t border-white/5">
-              {skillProgress.map((skill) => (
-                <div key={skill.skillId} className="flex items-center gap-2">
-                  <span className="text-[10px] text-white/50 flex-1 truncate">{skill.name}</span>
+          <p className="text-[10px] text-white/30">
+            {mode === "quick"
+              ? "Bronze rule: Again = 1 point, Good = 6 points, Easy = 10 points toward the card's mapped skill."
+              : "Session impact rule: each completed exercise adds 1-10 points to its mapped skills based on result quality."}
+          </p>
+          <div className="space-y-1.5 mt-2 pt-2 border-t border-white/5">
+            {missionSkillSummary.topSkills.map((skill) => (
+              <div key={skill.skillKey} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-white/50 flex-1 truncate">{skill.label}</span>
                   <div className="w-16 h-1.5 bg-white/5 rounded-full overflow-hidden">
                     <div
-                      className={cn(
-                        "h-full rounded-full",
-                        skill.rating >= 3 ? "bg-success" : skill.rating >= 2 ? "bg-accent" : skill.rating >= 1 ? "bg-yellow-400" : "bg-white/10",
-                      )}
-                      style={{ width: `${(skill.rating / 4) * 100}%` }}
+                      className="h-full rounded-full bg-accent"
+                      style={{ width: `${skill.pct}%` }}
                     />
                   </div>
-                  <span className="text-[9px] text-white/30 w-4 text-right">{skill.rating}</span>
+                  <span className="text-[9px] text-accent-light min-w-10 text-right">+{skill.pointsGained}</span>
                 </div>
-              ))}
-            </div>
-          )}
+                <div className="flex items-center justify-between text-[10px] text-white/35">
+                  <span>{skill.currentBand}</span>
+                  <span>{skill.totalPoints} pts total</span>
+                </div>
+                {skill.readiness && (
+                  <div className="grid grid-cols-2 gap-2 text-[10px] text-white/30">
+                    <span>P {skill.readiness.gates.points.current}/{skill.readiness.gates.points.target}</span>
+                    <span>Prof {skill.readiness.gates.proficiency.current}/{skill.readiness.gates.proficiency.target}</span>
+                    <span>Conf {skill.readiness.gates.confidence.current}/{skill.readiness.gates.confidence.target}</span>
+                    <span>Ev {skill.readiness.gates.evidence.current}/{skill.readiness.gates.evidence.target}</span>
+                  </div>
+                )}
+                {skill.nextTarget && (
+                  <div className="space-y-1">
+                    <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-white/30"
+                        style={{ width: `${skill.nextProgressPct ?? 0}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-white/30">
+                      {skill.readiness ? `${skill.readiness.readinessScore}% readiness · ` : ""}
+                      {skill.nextTarget}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -241,7 +284,7 @@ export default function SessionSummary({
         <div className="bg-card rounded-xl border border-white/10 p-4 space-y-2">
           <div className="flex items-center gap-2">
             <Target size={14} className="text-accent-light" />
-            <span className="text-xs font-medium text-white/60">Campaign Feedback</span>
+            <span className="text-xs font-medium text-white/60">Mission Progress</span>
           </div>
           {activeMission && (
             <p className="text-xs text-white/70">
@@ -253,7 +296,7 @@ export default function SessionSummary({
               href="/exercises?focus=recovery"
               className="inline-block px-3 py-1.5 rounded-lg text-xs font-medium border border-warn/30 bg-warn/20 text-warn"
             >
-              Recovery session recommended
+              Recovery block active
             </Link>
           )}
           {levelMissionStats && (
@@ -275,8 +318,24 @@ export default function SessionSummary({
           {latestMissionOutcome && (
             <div className="pt-2 border-t border-white/10 space-y-1">
               {latestMissionOutcome.checkpointAwardedId && (
-                <p className="text-[11px] text-success">Checkpoint earned in this session</p>
+                  <p className="text-[11px] text-success">Checkpoint advanced in this session</p>
               )}
+              {latestMissionOutcome.mode === "deep" && latestMissionOutcome.goldContractStatus === "strong" && (
+                <p className="text-[11px] text-success">Gold checkpoint status: passed</p>
+              )}
+              {latestMissionOutcome.mode === "deep" &&
+                latestMissionOutcome.goldContractStatus === "partial" &&
+                !latestMissionOutcome.checkpointAwardedId && (
+                  <p className="text-[11px] text-warn">
+                    Gold checkpoint status: partial completion. Mission credit applied, checkpoint not advanced.
+                  </p>
+                )}
+              {latestMissionOutcome.mode === "deep" &&
+                latestMissionOutcome.goldContractStatus === "missed" && (
+                  <p className="text-[11px] text-warn">
+                    Gold checkpoint status: missed. Finish the full contract to advance the checkpoint.
+                  </p>
+                )}
               {latestMissionOutcome.duplicatePenaltyApplied && (
                 <p className="text-[11px] text-warn">
                   Repeat pattern detected today: reduced mission credits applied
@@ -284,7 +343,7 @@ export default function SessionSummary({
               )}
               {latestMissionOutcome.appliedCredits && (
                 <p className="text-[11px] text-white/45">
-                  Credits applied: Bronze {latestMissionOutcome.appliedCredits.bronze} · Silver{" "}
+                  Mission credit: Bronze {latestMissionOutcome.appliedCredits.bronze} · Silver{" "}
                   {latestMissionOutcome.appliedCredits.silver} · Gold{" "}
                   {latestMissionOutcome.appliedCredits.gold}
                 </p>
@@ -295,7 +354,7 @@ export default function SessionSummary({
                   latestMissionOutcome.appliedCredits.gold ===
                   0 && (
                   <p className="text-[11px] text-warn">
-                    No mission credits from this run. Improve score or use a different session pattern.
+                    This run did not advance mission targets. Improve score or vary the session pattern.
                   </p>
                 )}
             </div>

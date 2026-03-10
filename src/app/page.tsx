@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import Badge from "@/components/Badge";
 import { DashboardShell } from "@/components/layout/ScreenShell";
 import type { ExerciseMode } from "@/lib/exerciseTypes";
+import { prettySkillLabel } from "@/lib/labels";
 import {
   inventoryToExerciseCounts,
   pickRunnableMode,
@@ -52,7 +53,6 @@ export default function Home() {
   const stats = useQuery(api.sessions.getStats);
   const dueCards = useQuery(api.cards.getDue, { limit: 999 });
   const generateExercises = useMutation(api.exerciseGenerator.generateExercises);
-  const milestones = useQuery(api.milestones.getAll);
   const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
   const inventoryStatus = useQuery(
     api.exercises.getMissionInventoryStatus,
@@ -95,9 +95,8 @@ export default function Home() {
   const hasDueCards = dueCardsCount > 0;
   const isFirstRun =
     stats !== undefined &&
-    milestones !== undefined &&
     stats.totalSessions === 0 &&
-    milestones.length === 0;
+    (learnerProgress?.missions?.length ?? 0) === 0;
 
   const activeProgress = useMemo(() => {
     const active = learnerProgress?.missions?.find((m) => m.active);
@@ -167,6 +166,13 @@ export default function Home() {
 
   const recommendationText = useMemo(() => {
     if (missionStatus === "blocked") {
+      const blockers = activeProgress?.active.skillBlockers ?? [];
+      if (blockers.length > 0) {
+        const labels = blockers
+          .slice(0, 2)
+          .map((blocker) => prettySkillLabel(blocker.skillKey) ?? blocker.skillKey);
+        return `Recovery recommended for ${labels.join(" and ")} before continuing the mission.`;
+      }
       return "Recovery recommended before continuing the mission.";
     }
     if (!runnableRecommendedMode) {
@@ -183,7 +189,7 @@ export default function Home() {
       return `${exerciseCounts.cloze + exerciseCounts.word_builder + exerciseCounts.pattern_drill + exerciseCounts.speed_translation + exerciseCounts.error_hunt} drill items ready.`;
     }
     return `${exerciseCounts.conversation} conversation scenari${exerciseCounts.conversation === 1 ? "o" : "os"} ready.`;
-  }, [dueCardsCount, exerciseCounts, generating, missionStatus, runnableRecommendedMode]);
+  }, [activeProgress?.active.skillBlockers, dueCardsCount, exerciseCounts, generating, missionStatus, runnableRecommendedMode]);
 
   const handleModeSelect = (mode: ExerciseMode) => {
     router.push(`/session/${today}?mode=${mode}`);

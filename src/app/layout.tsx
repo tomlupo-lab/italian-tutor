@@ -4,6 +4,7 @@ import BottomNav from "../components/BottomNav";
 import OfflineBanner from "../components/OfflineBanner";
 import ConvexClientProvider from "./ConvexClientProvider";
 import { RegisterSW } from "./RegisterSW";
+import { withBasePath } from "@/lib/paths";
 
 export const dynamic = 'force-dynamic';
 
@@ -19,15 +20,15 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "Italian Tutor \u2014 Marco",
   description: "AI-powered Italian language learning",
-  manifest: "/tutor/manifest.json",
+  manifest: withBasePath("/manifest.json"),
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Marco",
   },
   icons: {
-    icon: "/tutor/icons/icon-192.png",
-    apple: "/tutor/icons/apple-touch-icon.png",
+    icon: withBasePath("/icons/icon-192.png"),
+    apple: withBasePath("/icons/apple-touch-icon.png"),
   },
 };
 

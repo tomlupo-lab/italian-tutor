@@ -2,6 +2,22 @@ import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { MISSIONS } from "./progressionCatalog";
 
+type GeneratedRow = {
+  date: string;
+  type: string;
+  order: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  content: any;
+  skillId: string;
+  missionId: string;
+  tier: "quick" | "standard" | "deep";
+  difficulty: string;
+  source: string;
+  completed: boolean;
+  checkpointId?: string;
+  variantKey?: string;
+};
+
 function warsawToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
 }
@@ -20,6 +36,10 @@ function stableShuffle<T>(arr: T[], seed: string): T[] {
     .map((item, i) => ({ item, sort: stableHash(seed + i) }))
     .sort((a, b) => a.sort - b.sort)
     .map((x) => x.item);
+}
+
+function authoredCountForType(entries: GeneratedRow[], type: string) {
+  return entries.filter((entry) => entry.type === type).length;
 }
 
 // ── Vocab banks by tag ──────────────────────────────────────────────
@@ -253,6 +273,89 @@ const PATTERN_DRILLS: Array<{
   },
 ];
 
+// ── Speed translation prompts ───────────────────────────────────────
+const SPEED_TRANSLATION_BANK: Array<{
+  tags: string[];
+  sentences: Array<{ source: string; options: [string, string, string, string]; correct: number }>;
+}> = [
+  {
+    tags: ["travel"],
+    sentences: [
+      { source: "What platform does the train leave from?", options: ["Da quale binario parte il treno?", "Quanto costa il treno?", "Dov'è il biglietto del treno?", "Il treno arriva domani?"], correct: 0 },
+      { source: "The train is delayed by twenty minutes.", options: ["Il treno è in ritardo di venti minuti.", "Il treno parte alle venti minuti.", "Il treno è sul binario venti.", "Il treno costa venti minuti."], correct: 0 },
+      { source: "I need a ticket for Rome.", options: ["Ho bisogno di un biglietto per Roma.", "Vorrei una stanza a Roma.", "Cerco un tavolo per Roma.", "Posso cambiare Roma?"], correct: 0 },
+    ],
+  },
+  {
+    tags: ["food", "social"],
+    sentences: [
+      { source: "I would like a table for two.", options: ["Vorrei un tavolo per due.", "Vorrei il conto per due.", "Cerco due menù per favore.", "Posso pagare in due?"], correct: 0 },
+      { source: "Can we see the menu?", options: ["Possiamo vedere il menù?", "Possiamo pagare il menù?", "Vediamo il tavolo adesso?", "Prendiamo due menù domani?"], correct: 0 },
+      { source: "The bill, please.", options: ["Il conto, per favore.", "Il menù, per favore.", "La prenotazione, per favore.", "La cucina, per favore."], correct: 0 },
+    ],
+  },
+  {
+    tags: ["home", "shopping"],
+    sentences: [
+      { source: "How much is the monthly rent?", options: ["Quanto costa l'affitto al mese?", "Quanto costa la stanza oggi?", "Quanto è grande il contratto?", "Quanto dura il quartiere?"], correct: 0 },
+      { source: "Are utilities included?", options: ["Le spese sono incluse?", "Le scarpe sono incluse?", "La cucina è chiusa?", "Le chiavi sono aperte?"], correct: 0 },
+      { source: "Can I try this size?", options: ["Posso provare questa taglia?", "Posso cambiare questa stazione?", "Posso vedere questo contratto?", "Posso pagare questa camicia?"], correct: 0 },
+    ],
+  },
+  {
+    tags: ["health", "work"],
+    sentences: [
+      { source: "I have had a headache since this morning.", options: ["Ho mal di testa da stamattina.", "Ho un treno da stamattina.", "Ho il conto da stamattina.", "Ho un ufficio da stamattina."], correct: 0 },
+      { source: "How often do I take this medicine?", options: ["Ogni quanto prendo questa medicina?", "Quanto costa questa medicina?", "Dove metto questa medicina?", "Quando parte questa medicina?"], correct: 0 },
+      { source: "The meeting starts at ten.", options: ["La riunione inizia alle dieci.", "La riunione costa alle dieci.", "La riunione cambia alle dieci.", "La riunione parla alle dieci."], correct: 0 },
+    ],
+  },
+];
+
+// ── Error hunt sets ─────────────────────────────────────────────────
+const ERROR_HUNT_BANK: Array<{
+  focus: string[];
+  sentences: Array<{
+    text: string;
+    has_error: boolean;
+    corrected: string;
+    explanation: string;
+  }>;
+}> = [
+  {
+    focus: ["article_gender_number", "agreement"],
+    sentences: [
+      { text: "La mio camera e piccola ma luminosa.", has_error: true, corrected: "La mia camera è piccola ma luminosa.", explanation: "Possessive and accented verb form are wrong." },
+      { text: "I biglietti sono sul tavolo.", has_error: false, corrected: "I biglietti sono sul tavolo.", explanation: "The sentence is already correct." },
+      { text: "Le ragazze sono molto simpatico.", has_error: true, corrected: "Le ragazze sono molto simpatiche.", explanation: "Adjective must agree in feminine plural." },
+    ],
+  },
+  {
+    focus: ["preposition", "instruction_misread"],
+    sentences: [
+      { text: "Vado in stazione alle otto.", has_error: true, corrected: "Vado alla stazione alle otto.", explanation: "Direction to a place needs articulated preposition." },
+      { text: "Il treno parte dal binario tre.", has_error: false, corrected: "Il treno parte dal binario tre.", explanation: "The sentence is already correct." },
+      { text: "Scendo alla prossima fermata e cambio in Roma.", has_error: true, corrected: "Scendo alla prossima fermata e cambio a Roma.", explanation: "Cities usually take a, not in." },
+    ],
+  },
+  {
+    focus: ["verb_tense", "verb_conjugation"],
+    sentences: [
+      { text: "Ieri vado al lavoro in autobus.", has_error: true, corrected: "Ieri sono andato al lavoro in autobus.", explanation: "Completed past event needs passato prossimo." },
+      { text: "Domani partiamo presto.", has_error: false, corrected: "Domani partiamo presto.", explanation: "The sentence is already correct." },
+      { text: "Noi prende il treno alle sette.", has_error: true, corrected: "Noi prendiamo il treno alle sette.", explanation: "Verb conjugation must match noi." },
+    ],
+  },
+  {
+    focus: ["lexical_choice", "lexical_gap", "negation_reversal"],
+    sentences: [
+      { text: "Non ho nessun fame adesso.", has_error: true, corrected: "Non ho fame adesso.", explanation: "The phrase avere fame does not take nessun here." },
+      { text: "Mi serve una medicina senza zucchero.", has_error: false, corrected: "Mi serve una medicina senza zucchero.", explanation: "The sentence is already correct." },
+      { text: "Devi prendere questa pastiglia mai a stomaco vuoto.", has_error: true, corrected: "Non devi prendere questa pastiglia a stomaco vuoto.", explanation: "Negation placement changes the safety meaning." },
+    ],
+  },
+];
+
 // ── Conversation scenarios ──────────────────────────────────────────
 const CONVERSATION_BANK: Array<{
   scenario: string;
@@ -359,20 +462,34 @@ export const generateExercises = mutation({
     }
 
     const seed = date + missionId;
-    const rows: Array<{
-      date: string;
-      type: string;
-      order: number;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      content: any;
-      skillId: string;
-      missionId: string;
-      tier: "quick" | "standard" | "deep";
-      difficulty: string;
-      source: string;
-      completed: boolean;
-    }> = [];
+    const rows: GeneratedRow[] = [];
     let order = 0;
+
+    const authoredLibrary = await ctx.db
+      .query("missionExerciseLibrary")
+      .withIndex("by_mission_order", (q) => q.eq("missionId", missionId))
+      .collect();
+
+    const authoredRows = stableShuffle(
+      authoredLibrary.filter((entry) => entry.active),
+      seed + "authored"
+    ).map((entry, index) => ({
+      date,
+      type: entry.type,
+      order: index,
+      content: entry.content,
+      skillId: entry.skillId ?? "task_completion",
+      missionId,
+      tier: entry.tier,
+      difficulty: entry.level,
+      source: "mission_topup",
+      completed: false,
+      checkpointId: entry.checkpointId,
+      variantKey: entry.variantKey,
+    }));
+
+    rows.push(...authoredRows);
+    order = rows.length;
 
     // ── SRS flashcards (Bronze) ─────────────────────────────────
     const vocabPool: Array<{ it: string; en: string; example?: string; tag: string }> = [];
@@ -386,7 +503,7 @@ export const generateExercises = mutation({
       }
     }
     const shuffledVocab = stableShuffle(vocabPool, seed + "srs");
-    const srsCount = Math.min(mission.exerciseMix.srs, shuffledVocab.length, 12);
+    const srsCount = Math.max(0, Math.min(mission.exerciseMix.srs - authoredCountForType(rows, "srs"), shuffledVocab.length, 12));
     for (let i = 0; i < srsCount; i++) {
       rows.push({
         date,
@@ -415,7 +532,7 @@ export const generateExercises = mutation({
       ),
       seed + "cloze"
     );
-    const clozeCount = Math.min(mission.exerciseMix.cloze, relevantCloze.length, 6);
+    const clozeCount = Math.max(0, Math.min(mission.exerciseMix.cloze - authoredCountForType(rows, "cloze"), relevantCloze.length, 6));
     for (let i = 0; i < clozeCount; i++) {
       const t = relevantCloze[i];
       rows.push({
@@ -447,7 +564,7 @@ export const generateExercises = mutation({
       ),
       seed + "wb"
     );
-    const wbCount = Math.min(mission.exerciseMix.wordBuilder, relevantWB.length, 4);
+    const wbCount = Math.max(0, Math.min(mission.exerciseMix.wordBuilder - authoredCountForType(rows, "word_builder"), relevantWB.length, 4));
     for (let i = 0; i < wbCount; i++) {
       const t = relevantWB[i];
       const words = t.target.split(" ");
@@ -477,7 +594,7 @@ export const generateExercises = mutation({
       ),
       seed + "pd"
     );
-    const pdCount = Math.min(mission.exerciseMix.patternDrill, relevantPD.length, 3);
+    const pdCount = Math.max(0, Math.min(mission.exerciseMix.patternDrill - authoredCountForType(rows, "pattern_drill"), relevantPD.length, 3));
     for (let i = 0; i < pdCount; i++) {
       const t = relevantPD[i];
       rows.push({
@@ -498,6 +615,59 @@ export const generateExercises = mutation({
       });
     }
 
+    // ── Speed translation (Silver) ──────────────────────────────
+    const relevantST = stableShuffle(
+      SPEED_TRANSLATION_BANK.filter((set) =>
+        set.tags.some((tag) => mission.tags.includes(tag))
+      ),
+      seed + "st"
+    );
+    const stCount = Math.max(0, Math.min(mission.exerciseMix.speedTranslation - authoredCountForType(rows, "speed_translation"), relevantST.length, 3));
+    for (let i = 0; i < stCount; i++) {
+      const t = relevantST[i];
+      rows.push({
+        date,
+        type: "speed_translation",
+        order: order++,
+        content: {
+          sentences: t.sentences,
+          time_limit_seconds: 30,
+        },
+        skillId: "listening_literal",
+        missionId,
+        tier: "standard",
+        difficulty: mission.level,
+        source: "seed",
+        completed: false,
+      });
+    }
+
+    // ── Error hunt (Silver) ──────────────────────────────────────
+    const relevantEH = stableShuffle(
+      ERROR_HUNT_BANK.filter((set) =>
+        set.focus.some((focus) => mission.errorFocus.includes(focus))
+      ),
+      seed + "eh"
+    );
+    const ehCount = Math.max(0, Math.min(mission.exerciseMix.errorHunt - authoredCountForType(rows, "error_hunt"), relevantEH.length, 3));
+    for (let i = 0; i < ehCount; i++) {
+      const t = relevantEH[i];
+      rows.push({
+        date,
+        type: "error_hunt",
+        order: order++,
+        content: {
+          sentences: t.sentences,
+        },
+        skillId: "reading_comprehension",
+        missionId,
+        tier: "standard",
+        difficulty: mission.level,
+        source: "seed",
+        completed: false,
+      });
+    }
+
     // ── Conversation (Gold) ─────────────────────────────────────
     const relevantConv = stableShuffle(
       CONVERSATION_BANK.filter((c) =>
@@ -505,7 +675,7 @@ export const generateExercises = mutation({
       ),
       seed + "conv"
     );
-    const convCount = Math.min(mission.exerciseMix.conversation, relevantConv.length, 2);
+    const convCount = Math.max(0, Math.min(mission.exerciseMix.conversation - authoredCountForType(rows, "conversation"), relevantConv.length, 2));
     for (let i = 0; i < convCount; i++) {
       const t = relevantConv[i];
       rows.push({
@@ -529,7 +699,7 @@ export const generateExercises = mutation({
     }
 
     // ── Reflection (Gold) ───────────────────────────────────────
-    if (mission.exerciseMix.reflection > 0) {
+    if (mission.exerciseMix.reflection > authoredCountForType(rows, "reflection")) {
       rows.push({
         date,
         type: "reflection",
@@ -568,7 +738,9 @@ export const generateExercises = mutation({
           completed: row.completed,
           skillId: row.skillId,
           missionId: row.missionId,
+          checkpointId: row.checkpointId,
           tier: row.tier as "quick" | "standard" | "deep",
+          variantKey: row.variantKey,
           difficulty: row.difficulty,
           source: row.source,
         });
@@ -583,6 +755,8 @@ export const generateExercises = mutation({
         cloze: rows.filter((r) => r.type === "cloze").length,
         word_builder: rows.filter((r) => r.type === "word_builder").length,
         pattern_drill: rows.filter((r) => r.type === "pattern_drill").length,
+        speed_translation: rows.filter((r) => r.type === "speed_translation").length,
+        error_hunt: rows.filter((r) => r.type === "error_hunt").length,
         conversation: rows.filter((r) => r.type === "conversation").length,
         reflection: rows.filter((r) => r.type === "reflection").length,
       },

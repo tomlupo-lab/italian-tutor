@@ -4,19 +4,11 @@ import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { getTodayWarsaw } from "@/lib/date";
+import { prettySkillLabel } from "@/lib/labels";
+import { SKILL_BAND_THRESHOLDS, getSkillBandStatus } from "@/lib/skillBands";
+import type { LearnerLevel, LearnerSkill } from "@/lib/missionTypes";
 
 // ── Types ──────────────────────────────────────────────────────────
-
-interface Milestone {
-  _id: string;
-  skillId: string;
-  name: string;
-  level: string;
-  category: string;
-  rating: number;
-  active: boolean;
-  lastAssessed?: string;
-}
 
 interface Session {
   _id: string;
@@ -36,17 +28,16 @@ export interface LevelProgress {
   total: number;
   active: number;
   avgRating: number;
-  mastered: number;       // rating >= 3
+  mastered: number;
   masteredPct: number;
-  struggling: number;     // rating <= 1
-  distribution: number[]; // [0, 1, 2, 3, 4] counts
+  struggling: number;
+  distribution: number[];
 }
 
 export interface SkillInfo {
   id: string;
   name: string;
   level: string;
-  category: string;
   rating: number;
 }
 
@@ -84,8 +75,6 @@ export interface ProgressAnalytics {
   modeBreakdown: Record<string, { sessions: number; avgRating: number; exercises: number }>;
   srs: SrsHealth | null;
   errorBreakdown: ErrorBreakdown | null;
-  categoryStrengths: Record<string, { count: number; avgRating: number }>;
-  recentLevelUps: SkillInfo[];  // Skills that recently improved
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -104,78 +93,73 @@ export function useProgressAnalytics(): ProgressAnalytics {
   const fourteenDaysAgo = dateNDaysAgo(14);
   const sevenDaysAgo = dateNDaysAgo(7);
 
-  const milestones = useQuery(api.milestones.getAll) as Milestone[] | undefined;
+  const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
+    | { skills?: LearnerSkill[]; level?: LearnerLevel | null }
+    | undefined;
   const sessions = useQuery(api.sessions.getByDateRange, { from: thirtyDaysAgo, to: today }) as Session[] | undefined;
   const allCards = useQuery(api.cards.getAll) as AnyCard[] | undefined;
 
-  const loading = milestones === undefined || sessions === undefined || allCards === undefined;
+  const loading = learnerProgress === undefined || sessions === undefined || allCards === undefined;
 
-  // ── Milestone Analysis ──────────────────────────────────────────
+  // ── Skill Band Analysis ─────────────────────────────────────────
 
-  const milestoneAnalysis = useMemo(() => {
-    if (!milestones) return null;
+  const skillAnalysis = useMemo(() => {
+    const skills = learnerProgress?.skills ?? [];
+    if (skills.length === 0) return null;
 
-    const active = milestones.filter((m) => m.active);
-    const byLevel: Record<string, Milestone[]> = {};
-    const byCategory: Record<string, Milestone[]> = {};
+    const secureAtLevel = (skillKey: string, points: number, level: "A1" | "A2" | "B1" | "B2") => {
+      const threshold = SKILL_BAND_THRESHOLDS[skillKey]?.[level];
+      return typeof threshold?.points === "number" && points >= threshold.points;
+    };
 
-    for (const m of active) {
-      (byLevel[m.level] ??= []).push(m);
-      (byCategory[m.category] ??= []).push(m);
-    }
-
-    // Level progress
     const levels: Record<string, LevelProgress> = {};
-    for (const level of ["A1", "A2", "B1", "B2"]) {
-      const skills = byLevel[level];
-      if (!skills?.length) continue;
-      const ratings = skills.map((s) => s.rating);
-      const mastered = ratings.filter((r) => r >= 3).length;
+    for (const level of ["A1", "A2", "B1", "B2"] as const) {
+      const relevant = skills.filter((skill) => typeof SKILL_BAND_THRESHOLDS[skill.skillKey]?.[level]?.points === "number");
+      if (relevant.length === 0) continue;
+      const progressPcts = relevant.map((skill) => {
+        const threshold = SKILL_BAND_THRESHOLDS[skill.skillKey]![level]!;
+        return Math.max(0, Math.min(100, Math.round((skill.points / threshold.points) * 100)));
+      });
+      const mastered = relevant.filter((skill) => secureAtLevel(skill.skillKey, skill.points, level)).length;
       levels[level] = {
-        total: skills.length,
-        active: skills.length,
-        avgRating: Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 100) / 100,
+        total: relevant.length,
+        active: relevant.length,
+        avgRating: Math.round((progressPcts.reduce((a, b) => a + b, 0) / progressPcts.length) * 10) / 10,
         mastered,
-        masteredPct: Math.round((mastered / ratings.length) * 100),
-        struggling: ratings.filter((r) => r <= 1).length,
-        distribution: [0, 1, 2, 3, 4].map((v) => ratings.filter((r) => Math.round(r) === v).length),
+        masteredPct: Math.round((mastered / relevant.length) * 100),
+        struggling: progressPcts.filter((pct) => pct < 25).length,
+        distribution: [0, 20, 40, 60, 80].map((start) =>
+          progressPcts.filter((pct) => pct >= start && pct < (start === 80 ? 101 : start + 20)).length
+        ),
       };
     }
 
-    // Weakest / strongest
-    const weakest = [...active].sort((a, b) => a.rating - b.rating || a.name.localeCompare(b.name)).slice(0, 10);
-    const strongest = [...active].sort((a, b) => b.rating - a.rating || a.name.localeCompare(b.name)).slice(0, 5);
+    const scoreForStrength = (skill: LearnerSkill) => {
+      const status = getSkillBandStatus(skill.skillKey, skill.points);
+      return status.currentThreshold ? skill.points / status.currentThreshold.points : skill.points / 100;
+    };
 
-    // CEFR
-    const avg = active.length > 0 ? active.reduce((s, m) => s + m.rating, 0) / active.length : 0;
-    const cefr = avg >= 3.5 ? "B2" : avg >= 2.5 ? "B1" : avg >= 1.5 ? "A2" : avg >= 0.5 ? "A1" : "Pre-A1";
-
-    // B2 activation
-    const b1 = byLevel["B1"] ?? [];
-    const b1Mastered = b1.filter((s) => s.rating >= 3).length;
-    const threshold = Math.ceil(b1.length * 0.8);
-    const b2Activation = b1.length > 0
-      ? { mastered: b1Mastered, total: b1.length, threshold, remaining: Math.max(0, threshold - b1Mastered), pct: threshold > 0 ? Math.round((b1Mastered / threshold) * 100) : 0, unlocked: b1Mastered >= threshold }
-      : null;
-
-    // Category strengths
-    const categoryStrengths: Record<string, { count: number; avgRating: number }> = {};
-    for (const [cat, skills] of Object.entries(byCategory)) {
-      const ratings = skills.map((s) => s.rating);
-      categoryStrengths[cat] = {
-        count: skills.length,
-        avgRating: Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 100) / 100,
-      };
-    }
-
-    // Recently improved (has lastAssessed in last 7 days and rating > 0)
-    const recentLevelUps = active
-      .filter((m) => m.lastAssessed && m.lastAssessed >= sevenDaysAgo && m.rating > 0)
-      .sort((a, b) => b.rating - a.rating)
+    const weakest = [...skills]
+      .sort((a, b) => scoreForStrength(a) - scoreForStrength(b) || a.skillKey.localeCompare(b.skillKey))
+      .slice(0, 10);
+    const strongest = [...skills]
+      .sort((a, b) => scoreForStrength(b) - scoreForStrength(a) || a.skillKey.localeCompare(b.skillKey))
       .slice(0, 5);
 
-    const toInfo = (m: Milestone): SkillInfo => ({
-      id: m.skillId, name: m.name, level: m.level, category: m.category, rating: m.rating,
+    const cefr = learnerProgress?.level?.currentLevel ?? "A1";
+
+    const b1Relevant = skills.filter((skill) => typeof SKILL_BAND_THRESHOLDS[skill.skillKey]?.B1?.points === "number");
+    const b1Secure = b1Relevant.filter((skill) => secureAtLevel(skill.skillKey, skill.points, "B1")).length;
+    const threshold = Math.ceil(b1Relevant.length * 0.8);
+    const b2Activation = b1Relevant.length > 0
+      ? { mastered: b1Secure, total: b1Relevant.length, threshold, remaining: Math.max(0, threshold - b1Secure), pct: threshold > 0 ? Math.round((b1Secure / threshold) * 100) : 0, unlocked: b1Secure >= threshold }
+      : null;
+
+    const toInfo = (skill: LearnerSkill): SkillInfo => ({
+      id: skill.skillKey,
+      name: prettySkillLabel(skill.skillKey) ?? skill.skillKey,
+      level: getSkillBandStatus(skill.skillKey, skill.points).currentBand ?? "A1",
+      rating: Math.min(4, Math.max(0, Math.round((scoreForStrength(skill) * 4)))),
     });
 
     return {
@@ -184,10 +168,8 @@ export function useProgressAnalytics(): ProgressAnalytics {
       weakest: weakest.map(toInfo),
       strongest: strongest.map(toInfo),
       b2Activation,
-      categoryStrengths,
-      recentLevelUps: recentLevelUps.map(toInfo),
     };
-  }, [milestones, sevenDaysAgo]);
+  }, [learnerProgress?.level?.currentLevel, learnerProgress?.skills]);
 
   // ── Session Accuracy ────────────────────────────────────────────
 
@@ -281,16 +263,14 @@ export function useProgressAnalytics(): ProgressAnalytics {
 
   return {
     loading,
-    cefr: milestoneAnalysis?.cefr ?? "—",
-    levels: milestoneAnalysis?.levels ?? {},
-    weakest: milestoneAnalysis?.weakest ?? [],
-    strongest: milestoneAnalysis?.strongest ?? [],
-    b2Activation: milestoneAnalysis?.b2Activation ?? null,
+    cefr: skillAnalysis?.cefr ?? "—",
+    levels: skillAnalysis?.levels ?? {},
+    weakest: skillAnalysis?.weakest ?? [],
+    strongest: skillAnalysis?.strongest ?? [],
+    b2Activation: skillAnalysis?.b2Activation ?? null,
     weekComparison: sessionAnalysis?.weekComparison ?? null,
     modeBreakdown: sessionAnalysis?.modeBreakdown ?? {},
     srs,
     errorBreakdown: sessionAnalysis?.errorBreakdown ?? null,
-    categoryStrengths: milestoneAnalysis?.categoryStrengths ?? {},
-    recentLevelUps: milestoneAnalysis?.recentLevelUps ?? [],
   };
 }

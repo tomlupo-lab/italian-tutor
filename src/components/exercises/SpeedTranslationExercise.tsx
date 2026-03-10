@@ -27,9 +27,21 @@ export default function SpeedTranslationExercise({
   const [finished, setFinished] = useState(false);
   const startTime = useRef(Date.now());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const completedRef = useRef(false);
 
   const sentence = c?.sentences?.[currentIdx];
   const total = c?.sentences?.length ?? 0;
+
+  const finishSession = useCallback(
+    (result: SpeedTranslationResult) => {
+      if (completedRef.current) return;
+      completedRef.current = true;
+      if (timerRef.current) clearInterval(timerRef.current);
+      setFinished(true);
+      onComplete(result);
+    },
+    [onComplete],
+  );
 
   // Timer
   useEffect(() => {
@@ -56,15 +68,14 @@ export default function SpeedTranslationExercise({
     const paddedScores = [...scores, ...Array(remaining).fill(false)];
     const totalCorrect = paddedScores.filter(Boolean).length;
 
-    setFinished(true);
     const result: SpeedTranslationResult = {
       answers: paddedAnswers,
       scores: paddedScores,
       total_correct: totalCorrect,
       time_ms: (c?.time_limit_seconds ?? 90) * 1000,
     };
-    onComplete(result);
-  }, [timeLeft, finished, answers, scores, total, c?.time_limit_seconds, onComplete]);
+    finishSession(result);
+  }, [timeLeft, finished, answers, scores, total, c?.time_limit_seconds, finishSession]);
 
   const handleSelect = useCallback(
     (idx: number) => {
@@ -78,8 +89,6 @@ export default function SpeedTranslationExercise({
       setTimeout(() => {
         setShowFeedback(false);
         if (currentIdx + 1 >= total) {
-          setFinished(true);
-          if (timerRef.current) clearInterval(timerRef.current);
           const allAnswers = [...answers, idx];
           const allScores = [...scores, correct];
           const result: SpeedTranslationResult = {
@@ -88,13 +97,13 @@ export default function SpeedTranslationExercise({
             total_correct: allScores.filter(Boolean).length,
             time_ms: Date.now() - startTime.current,
           };
-          onComplete(result);
+          finishSession(result);
         } else {
           setCurrentIdx((i) => i + 1);
         }
       }, correct ? 400 : 1000);
     },
-    [showFeedback, finished, sentence, currentIdx, total, answers, scores, onComplete],
+    [showFeedback, finished, sentence, currentIdx, total, answers, scores, finishSession],
   );
 
   // Guard: malformed content (after all hooks)
@@ -102,7 +111,13 @@ export default function SpeedTranslationExercise({
     return <div className="bg-card rounded-2xl border border-white/10 p-5 text-white/50 text-sm">Exercise data missing</div>;
   }
 
-  if (finished) return null;
+  if (finished) {
+    return (
+      <div className="bg-card rounded-2xl border border-white/10 p-5 text-center text-sm text-white/50">
+        Wrapping up translation round...
+      </div>
+    );
+  }
 
   const timerPct = (timeLeft / c.time_limit_seconds) * 100;
   const isUrgent = timeLeft <= 15;

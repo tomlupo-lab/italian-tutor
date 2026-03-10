@@ -31,8 +31,11 @@ export interface LearnerMission {
   active: boolean;
   credits?: { bronze: number; silver: number; gold: number };
   criticalErrorsCount?: number;
+  skillBlockers?: Array<{ skillKey: string; weakEvidenceCount: number; rollingErrorRate: number }>;
   averageScore?: number;
   completedCheckpointIds?: string[];
+  skillPoints?: Array<{ skillKey: string; points: number }>;
+  errorCounts?: Array<{ errorKey: string; count: number }>;
 }
 
 export interface CatalogMission {
@@ -58,6 +61,13 @@ export interface LearnerLevel {
 export interface LearnerSkill {
   skillKey: string;
   points: number;
+  proficiency?: number;
+  confidence?: number;
+  evidenceCount?: number;
+  recentWeakEvidence?: number;
+  recentStrongEvidence?: number;
+  rollingErrorRate?: number;
+  lastUpdated?: number;
 }
 
 export interface RoadmapRule {

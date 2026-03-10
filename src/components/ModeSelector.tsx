@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import Badge from "@/components/Badge";
 import { Trophy, RotateCcw } from "lucide-react";
 import { useState, useEffect } from "react";
+import { SESSION_BLUEPRINTS } from "@/lib/sessionSelection";
 
 interface ModeSelectorProps {
   exerciseCounts: Record<string, number>;
@@ -48,8 +49,8 @@ const MODES: {
     mode: "quick",
     label: "Bronze",
     emoji: "🥉",
-    duration: "~5 min",
-    description: "SRS flashcard review",
+    duration: SESSION_BLUEPRINTS.quick.duration,
+    description: SESSION_BLUEPRINTS.quick.sessionLabel,
     color: "from-amber-700/20 to-amber-800/5 border-amber-600/30",
     emptyHint: "No due cards or Bronze reviews yet",
   },
@@ -57,8 +58,8 @@ const MODES: {
     mode: "standard",
     label: "Silver",
     emoji: "🥈",
-    duration: "~10 min",
-    description: "Cloze, drills, translation, error hunt",
+    duration: SESSION_BLUEPRINTS.standard.duration,
+    description: SESSION_BLUEPRINTS.standard.sessionLabel,
     color: "from-slate-400/20 to-slate-500/5 border-slate-400/30",
     emptyHint: "Complete lessons or recovery work to unlock drills",
   },
@@ -66,8 +67,8 @@ const MODES: {
     mode: "deep",
     label: "Gold",
     emoji: "🥇",
-    duration: "~15 min",
-    description: "Conversation with Marco",
+    duration: SESSION_BLUEPRINTS.deep.duration,
+    description: SESSION_BLUEPRINTS.deep.sessionLabel,
     color: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30",
     emptyHint: "Conversation opens when Marco has a live scenario ready",
   },

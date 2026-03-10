@@ -9,6 +9,58 @@ import {
   type MissionCheckpoint,
 } from "./progressionCatalog";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEAK_EVIDENCE_THRESHOLD = 0.45;
+const STRONG_EVIDENCE_THRESHOLD = 0.75;
+const BLOCKER_MIN_WEAK_EVIDENCE = 3;
+const BLOCKER_MIN_ERROR_RATE = 0.55;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function daysSince(timestamp: number | undefined, now: number) {
+  if (!timestamp) return 0;
+  return Math.max(0, Math.floor((now - timestamp) / DAY_MS));
+}
+
+function applySkillStateDecay(
+  current: {
+    points?: number;
+    proficiency?: number;
+    confidence?: number;
+    evidenceCount?: number;
+    recentWeakEvidence?: number;
+    recentStrongEvidence?: number;
+    rollingErrorRate?: number;
+    lastUpdated?: number;
+  } | null,
+  now: number,
+) {
+  const staleDays = daysSince(current?.lastUpdated, now);
+  const proficiencyDecay = staleDays <= 2 ? 0 : Math.min(18, (staleDays - 2) * 1.4);
+  const confidenceDecay = staleDays <= 1 ? 0 : Math.min(0.35, (staleDays - 1) * 0.02);
+  const weakCarry = Math.pow(0.82, staleDays);
+  const strongCarry = Math.pow(0.86, staleDays);
+
+  const recentWeakEvidence = (current?.recentWeakEvidence ?? 0) * weakCarry;
+  const recentStrongEvidence = (current?.recentStrongEvidence ?? 0) * strongCarry;
+  const rollingTotal = recentWeakEvidence + recentStrongEvidence;
+
+  return {
+    points: current?.points ?? 0,
+    proficiency: clamp((current?.proficiency ?? 0) - proficiencyDecay, 0, 100),
+    confidence: clamp((current?.confidence ?? 0) - confidenceDecay, 0, 1),
+    evidenceCount: current?.evidenceCount ?? 0,
+    recentWeakEvidence,
+    recentStrongEvidence,
+    rollingErrorRate:
+      rollingTotal > 0
+        ? recentWeakEvidence / rollingTotal
+        : current?.rollingErrorRate ?? 0,
+  };
+}
+
 function mergeCounterList(
   current: Array<{ key: string; count: number }>,
   delta: Array<{ key: string; count: number }>
@@ -268,6 +320,7 @@ export const setActiveMission = mutation({
         totalScore: existing.totalScore ?? 0,
         averageScore: existing.averageScore ?? 0,
         criticalErrorsCount: existing.criticalErrorsCount ?? 0,
+        skillBlockers: existing.skillBlockers ?? [],
         skillPoints: existing.skillPoints ?? [],
         errorCounts: existing.errorCounts ?? [],
         completedCheckpointIds: existing.completedCheckpointIds ?? [],
@@ -288,6 +341,7 @@ export const setActiveMission = mutation({
       totalScore: 0,
       averageScore: 0,
       criticalErrorsCount: 0,
+      skillBlockers: [],
       skillPoints: [],
       errorCounts: [],
       completedCheckpointIds: [],
@@ -361,6 +415,7 @@ export const getActiveMission = query({
 
 export const recordLessonCompletion = mutation({
   args: {
+    sessionId: v.optional(v.id("sessions")),
     learnerId: v.optional(v.string()),
     missionId: v.optional(v.string()),
     sessionDate: v.string(),
@@ -371,12 +426,36 @@ export const recordLessonCompletion = mutation({
     minutes: v.number(),
     sessionSignature: v.optional(v.string()),
     criticalErrors: v.optional(v.number()),
+    goldCheckpointPassed: v.optional(v.boolean()),
+    goldContractStatus: v.optional(
+      v.union(v.literal("strong"), v.literal("partial"), v.literal("missed"))
+    ),
     confidenceWeight: v.optional(v.number()),
     skillDeltas: v.optional(
       v.array(
         v.object({
           skillKey: v.string(),
           points: v.number(),
+          evidenceCount: v.optional(v.number()),
+          proficiencySample: v.optional(v.number()),
+        })
+      )
+    ),
+    evidenceEntries: v.optional(
+      v.array(
+        v.object({
+          exerciseId: v.string(),
+          exerciseType: v.string(),
+          skillKey: v.string(),
+          evidenceType: v.union(
+            v.literal("srs"),
+            v.literal("drill"),
+            v.literal("conversation"),
+            v.literal("reflection")
+          ),
+          rawScore: v.number(),
+          weight: v.number(),
+          pointsDelta: v.number(),
         })
       )
     ),
@@ -393,6 +472,7 @@ export const recordLessonCompletion = mutation({
     const learnerId = args.learnerId ?? "local";
     const criticalErrors = args.criticalErrors ?? 0;
     const confidence = Math.max(0, Math.min(1, args.confidenceWeight ?? 1));
+    const now = Date.now();
 
     let missionProgress = args.missionId
       ? await ctx.db
@@ -472,11 +552,14 @@ export const recordLessonCompletion = mutation({
     const completedCheckpointIds = missionProgress.completedCheckpointIds ?? [];
     let nextCompletedCheckpointIds = completedCheckpointIds;
     let checkpointAwardedId: string | null = null;
+    const checkpointEligibleByContract =
+      args.goldCredit > 0 ? (args.goldCheckpointPassed ?? false) : true;
     const nextCheckpoint = mission.checkpoints.find((cp) => !completedCheckpointIds.includes(cp.id));
     if (
       nextCheckpoint &&
       !duplicateSameDay &&
-      args.scorePercent >= nextCheckpoint.minScore
+      args.scorePercent >= nextCheckpoint.minScore &&
+      checkpointEligibleByContract
     ) {
       nextCompletedCheckpointIds = [...completedCheckpointIds, nextCheckpoint.id];
       checkpointAwardedId = nextCheckpoint.id;
@@ -493,7 +576,131 @@ export const recordLessonCompletion = mutation({
           )
         : [...currentSignatures, { date: args.sessionDate, signature, count: 1 }];
 
-    const nextCriticalErrors = criticalErrors;
+    const evidenceBySkill = new Map<
+      string,
+      Array<{
+        exerciseId: string;
+        exerciseType: string;
+        skillKey: string;
+        evidenceType: "srs" | "drill" | "conversation" | "reflection";
+        rawScore: number;
+        weight: number;
+        pointsDelta: number;
+      }>
+    >();
+    for (const entry of args.evidenceEntries ?? []) {
+      const list = evidenceBySkill.get(entry.skillKey) ?? [];
+      list.push(entry);
+      evidenceBySkill.set(entry.skillKey, list);
+    }
+
+    const skillBlockers: Array<{ skillKey: string; weakEvidenceCount: number; rollingErrorRate: number }> = [];
+
+    for (const [skillKey, entries] of evidenceBySkill.entries()) {
+      const current = await ctx.db
+        .query("userSkillProgress")
+        .withIndex("by_learner_skill", (q) => q.eq("learnerId", learnerId).eq("skillKey", skillKey))
+        .first();
+
+      const decayed = applySkillStateDecay(current, now);
+      let nextPoints = decayed.points;
+      let nextProficiency = decayed.proficiency;
+      let nextConfidence = decayed.confidence;
+      let nextEvidenceCount = decayed.evidenceCount;
+      let nextRecentWeakEvidence = decayed.recentWeakEvidence;
+      let nextRecentStrongEvidence = decayed.recentStrongEvidence;
+      let nextRollingErrorRate = decayed.rollingErrorRate;
+
+      for (const entry of entries) {
+        const weightedPoints = Math.max(1, Math.round(entry.pointsDelta * confidence));
+        nextPoints += weightedPoints;
+
+        const targetProficiency = Math.max(0, Math.min(100, Math.round(entry.rawScore * 100)));
+        const alpha = entry.rawScore < WEAK_EVIDENCE_THRESHOLD
+          ? Math.min(0.42, 0.18 + entry.weight * 0.08)
+          : Math.min(0.34, 0.1 + entry.weight * 0.07);
+        const updatedProficiency = Math.round(
+          nextProficiency * (1 - alpha) + targetProficiency * alpha
+        );
+        const proficiencyDelta = updatedProficiency - nextProficiency;
+        nextProficiency = updatedProficiency;
+
+        if (entry.rawScore < WEAK_EVIDENCE_THRESHOLD) {
+          const confidencePenalty = entry.weight * (0.025 + (WEAK_EVIDENCE_THRESHOLD - entry.rawScore) * 0.09);
+          nextConfidence = Math.max(0, nextConfidence - confidencePenalty);
+          nextRecentWeakEvidence += entry.weight;
+        } else {
+          const confidenceBoost = entry.weight * (0.03 + entry.rawScore * 0.04);
+          nextConfidence = Math.min(1, nextConfidence + (1 - nextConfidence) * confidenceBoost);
+          if (entry.rawScore >= STRONG_EVIDENCE_THRESHOLD) {
+            nextRecentStrongEvidence += entry.weight;
+          } else {
+            nextRecentStrongEvidence += entry.weight * 0.5;
+          }
+        }
+
+        const rollingTotal = nextRecentWeakEvidence + nextRecentStrongEvidence;
+        nextRollingErrorRate = rollingTotal > 0 ? nextRecentWeakEvidence / rollingTotal : 0;
+        nextEvidenceCount += 1;
+
+        if (args.sessionId) {
+          await ctx.db.insert("exerciseEvidence", {
+            sessionId: args.sessionId,
+            learnerId,
+            sessionDate: args.sessionDate,
+            missionId: mission.missionId,
+            exerciseId: entry.exerciseId,
+            exerciseType: entry.exerciseType,
+            skillKey,
+            evidenceType: entry.evidenceType,
+            rawScore: entry.rawScore,
+            weight: entry.weight,
+            pointsDelta: weightedPoints,
+            proficiencyDelta,
+            createdAt: Date.now(),
+          });
+        }
+      }
+
+      if (current) {
+        await ctx.db.patch(current._id, {
+          points: nextPoints,
+          proficiency: nextProficiency,
+          confidence: nextConfidence,
+          evidenceCount: nextEvidenceCount,
+          recentWeakEvidence: Math.round(nextRecentWeakEvidence * 10) / 10,
+          recentStrongEvidence: Math.round(nextRecentStrongEvidence * 10) / 10,
+          rollingErrorRate: Math.round(nextRollingErrorRate * 100) / 100,
+          lastUpdated: now,
+        });
+      } else {
+        await ctx.db.insert("userSkillProgress", {
+          learnerId,
+          skillKey,
+          points: nextPoints,
+          proficiency: nextProficiency,
+          confidence: nextConfidence,
+          evidenceCount: nextEvidenceCount,
+          recentWeakEvidence: Math.round(nextRecentWeakEvidence * 10) / 10,
+          recentStrongEvidence: Math.round(nextRecentStrongEvidence * 10) / 10,
+          rollingErrorRate: Math.round(nextRollingErrorRate * 100) / 100,
+          lastUpdated: now,
+        });
+      }
+
+      if (
+        nextRecentWeakEvidence >= BLOCKER_MIN_WEAK_EVIDENCE &&
+        nextRollingErrorRate >= BLOCKER_MIN_ERROR_RATE
+      ) {
+        skillBlockers.push({
+          skillKey,
+          weakEvidenceCount: Math.round(nextRecentWeakEvidence * 10) / 10,
+          rollingErrorRate: Math.round(nextRollingErrorRate * 100) / 100,
+        });
+      }
+    }
+
+    const nextCriticalErrors = criticalErrors + skillBlockers.length;
 
     const missionCompleted =
       nextCredits.bronze >= mission.exerciseTargets.bronzeReviews &&
@@ -506,45 +713,19 @@ export const recordLessonCompletion = mutation({
     await ctx.db.patch(missionProgress._id, {
       status: missionCompleted ? "completed" : "active",
       active: missionCompleted ? false : true,
-      completedAt: missionCompleted ? Date.now() : missionProgress.completedAt,
+      completedAt: missionCompleted ? now : missionProgress.completedAt,
       lastActivityDate: args.sessionDate,
       credits: nextCredits,
       sessionsCompleted: nextSessions,
       totalScore: nextTotalScore,
       averageScore: nextAverage,
       criticalErrorsCount: nextCriticalErrors,
+      skillBlockers,
       skillPoints: mergedSkillPairs,
       errorCounts: mergedErrorPairs,
       completedCheckpointIds: nextCompletedCheckpointIds,
       sessionSignatures: nextSessionSignatures.slice(-40),
     });
-
-    for (const delta of args.skillDeltas ?? []) {
-      const weightedDelta = Math.round(delta.points * confidence);
-      if (weightedDelta === 0) continue;
-
-      const current = await ctx.db
-        .query("userSkillProgress")
-        .withIndex("by_learner_skill", (q) => q.eq("learnerId", learnerId).eq("skillKey", delta.skillKey))
-        .first();
-
-      if (current) {
-        const nextPoints = current.points + weightedDelta;
-        await ctx.db.patch(current._id, {
-          points: nextPoints,
-          confidence: Math.max(current.confidence, confidence),
-          lastUpdated: Date.now(),
-        });
-      } else {
-        await ctx.db.insert("userSkillProgress", {
-          learnerId,
-          skillKey: delta.skillKey,
-          points: weightedDelta,
-          confidence,
-          lastUpdated: Date.now(),
-        });
-      }
-    }
 
     const levelState = await getOrCreateLevelProgress(ctx, learnerId);
     const activeDates = levelState.activeDates.includes(args.sessionDate)
@@ -614,6 +795,8 @@ export const recordLessonCompletion = mutation({
       missionCompleted,
       unlockedNextLevel,
       checkpointAwardedId,
+      checkpointPassed: args.goldCredit > 0 ? (args.goldCheckpointPassed ?? false) : checkpointAwardedId !== null,
+      goldContractStatus: args.goldCredit > 0 ? (args.goldContractStatus ?? "missed") : undefined,
       duplicateSameDay,
       appliedCredits: {
         bronze: appliedBronzeCredit,

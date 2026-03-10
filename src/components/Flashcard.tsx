@@ -57,9 +57,25 @@ export default function Flashcard({
     </Badge>
   ) : null;
 
+  const handleFlipKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      onFlip();
+    },
+    [onFlip],
+  );
+
   if (mode === "classic") {
     return (
-      <div className="perspective-1000 w-full h-60 cursor-pointer mx-auto" onClick={onFlip}>
+      <div
+        className="perspective-1000 w-full h-60 cursor-pointer mx-auto"
+        onClick={onFlip}
+        onKeyDown={handleFlipKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-label={flipped ? "Hide card answer" : "Reveal card answer"}
+      >
         <div className={cn("relative w-full h-full transition-transform duration-500 preserve-3d", flipped && "rotate-y-180")}>
           <div className="absolute inset-0 backface-hidden bg-card rounded-2xl border border-white/10 flex flex-col items-center justify-center p-7">
             <p className="text-2xl font-semibold text-center">{card.it}</p>
@@ -90,7 +106,14 @@ export default function Flashcard({
 
   if (mode === "reverse") {
     return (
-      <div className="perspective-1000 w-full h-60 cursor-pointer mx-auto" onClick={onFlip}>
+      <div
+        className="perspective-1000 w-full h-60 cursor-pointer mx-auto"
+        onClick={onFlip}
+        onKeyDown={handleFlipKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-label={flipped ? "Hide card answer" : "Reveal card answer"}
+      >
         <div className={cn("relative w-full h-full transition-transform duration-500 preserve-3d", flipped && "rotate-y-180")}>
           <div className="absolute inset-0 backface-hidden bg-card rounded-2xl border border-white/10 flex flex-col items-center justify-center p-7">
             <p className="text-2xl font-semibold text-center text-accent-light">{card.en}</p>
@@ -119,7 +142,14 @@ export default function Flashcard({
 
   if (mode === "listening") {
     return (
-      <div className="perspective-1000 w-full h-60 cursor-pointer mx-auto" onClick={onFlip}>
+      <div
+        className="perspective-1000 w-full h-60 cursor-pointer mx-auto"
+        onClick={onFlip}
+        onKeyDown={handleFlipKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-label={flipped ? "Hide card answer" : "Reveal card answer"}
+      >
         <div className={cn("relative w-full h-full transition-transform duration-500 preserve-3d", flipped && "rotate-y-180")}>
           <div className="absolute inset-0 backface-hidden bg-card rounded-2xl border border-white/10 flex flex-col items-center justify-center p-7">
             <button onClick={handleSpeak} className="p-5 rounded-full bg-accent/20 hover:bg-accent/30 text-accent-light transition mb-4" aria-label="Listen to pronunciation">
@@ -148,7 +178,14 @@ export default function Flashcard({
   const clozeAnswer = cloze?.answer || card.it;
 
   return (
-    <div className="perspective-1000 w-full h-60 cursor-pointer mx-auto" onClick={onFlip}>
+    <div
+      className="perspective-1000 w-full h-60 cursor-pointer mx-auto"
+      onClick={onFlip}
+      onKeyDown={handleFlipKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-label={flipped ? "Hide card answer" : "Reveal card answer"}
+    >
       <div className={cn("relative w-full h-full transition-transform duration-500 preserve-3d", flipped && "rotate-y-180")}>
         <div className="absolute inset-0 backface-hidden bg-card rounded-2xl border border-white/10 flex flex-col items-center justify-center p-7">
           <p className="text-xs text-white/30 mb-2">📝 Fill the blank</p>

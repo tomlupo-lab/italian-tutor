@@ -1,7 +1,6 @@
 "use client";
 
 import { useProgressAnalytics } from "@/hooks/useProgressAnalytics";
-import MilestoneBar from "@/components/MilestoneBar";
 import {
   ArrowLeft,
   Flame,
@@ -19,6 +18,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { prettySkillLabel } from "@/lib/labels";
+import { computeSkillBandReadiness, describeCurrentBand, describeNextTarget, getSkillBandStatus } from "@/lib/skillBands";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useMemo } from "react";
@@ -26,6 +27,7 @@ import { DashboardShell } from "@/components/layout/ScreenShell";
 import type {
   ActiveMissionResult,
   LearnerMission,
+  LearnerSkill,
 } from "@/lib/missionTypes";
 
 const MODE_META: { mode: string; label: string; emoji: string; color: string }[] = [
@@ -33,19 +35,6 @@ const MODE_META: { mode: string; label: string; emoji: string; color: string }[]
   { mode: "standard", label: "Silver", emoji: "🥈", color: "from-slate-400/20 to-slate-500/5 border-slate-400/30" },
   { mode: "deep", label: "Gold", emoji: "🥇", color: "from-yellow-500/20 to-yellow-600/5 border-yellow-500/30" },
 ];
-
-const LEVEL_COLORS: Record<string, string> = {
-  A1: "bg-green-400",
-  A2: "bg-accent",
-  B1: "bg-purple-400",
-  B2: "bg-yellow-400",
-};
-
-const CAT_LABELS: Record<string, string> = {
-  grammar: "Grammar",
-  vocab: "Vocabulary",
-  functional: "Functional",
-};
 
 const ERROR_CAT_LABELS: Record<string, string> = {
   cloze: "Fill-in-the-blank",
@@ -73,11 +62,10 @@ export default function ProgressPage() {
   const analytics = useProgressAnalytics();
   const stats = useQuery(api.sessions.getStats);
   const recentSessions = useQuery(api.sessions.listRecent, { limit: 200 });
-  const milestones = useQuery(api.milestones.getAll);
   const allCards = useQuery(api.cards.getAll) as AnyCard[] | undefined;
   const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
   const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
-    | { missions: LearnerMission[] }
+    | { missions: LearnerMission[]; skills?: LearnerSkill[] }
     | undefined;
   const activeProgress = learnerProgress?.missions?.find((m) => m.active);
 
@@ -118,22 +106,30 @@ export default function ProgressPage() {
     return weeks;
   }, [recentSessions]);
 
-  // Grouped milestones for detailed view
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const groupedByLevel = useMemo(() => {
-    if (!milestones) return {} as Record<string, any[]>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const groups: Record<string, any[]> = {};
-    for (const m of milestones) {
-      if (!(m as { active: boolean }).active) continue;
-      const level = (m as { level: string }).level;
-      (groups[level] ??= []).push(m);
-    }
-    for (const level of Object.keys(groups)) {
-      groups[level].sort((a, b) => b.rating - a.rating || a.name.localeCompare(b.name));
-    }
-    return groups;
-  }, [milestones]);
+  const skillBandRows = useMemo(() => {
+    const skills = learnerProgress?.skills ?? [];
+    return skills
+      .map((skill) => {
+        const status = getSkillBandStatus(skill.skillKey, skill.points);
+        const targetBand = status.nextBand ?? status.currentBand ?? "A1";
+        const readiness = computeSkillBandReadiness(skill.skillKey, targetBand, {
+          points: skill.points,
+          proficiency: skill.proficiency ?? 0,
+          confidence: skill.confidence ?? 0,
+          evidenceCount: skill.evidenceCount ?? 0,
+        });
+        return {
+          skillKey: skill.skillKey,
+          label: prettySkillLabel(skill.skillKey) ?? skill.skillKey,
+          points: skill.points,
+          currentBand: describeCurrentBand(skill.skillKey, skill.points),
+          nextTarget: describeNextTarget(skill.skillKey, skill.points),
+          pct: readiness?.readinessScore ?? status.progressToNextPct ?? 100,
+          readiness,
+        };
+      })
+      .sort((a, b) => b.points - a.points || a.label.localeCompare(b.label));
+  }, [learnerProgress?.skills]);
 
   if (analytics.loading) {
     return (
@@ -188,7 +184,7 @@ export default function ProgressPage() {
         {activeProgress && (
           <p className="text-[11px] text-white/40">
             Credits: Bronze {activeProgress.credits?.bronze ?? 0} · Silver {activeProgress.credits?.silver ?? 0} · Gold {activeProgress.credits?.gold ?? 0}
-            {(activeProgress.criticalErrorsCount ?? 0) > 0 ? ` · ${activeProgress.criticalErrorsCount} critical blockers` : ""}
+            {(activeProgress.criticalErrorsCount ?? 0) > 0 ? ` · ${activeProgress.criticalErrorsCount} recovery blocker${(activeProgress.criticalErrorsCount ?? 0) === 1 ? "" : "s"}` : ""}
           </p>
         )}
         <div className="pt-2 border-t border-white/10 flex items-center gap-3">
@@ -396,91 +392,43 @@ export default function ProgressPage() {
         </div>
       )}
 
-      {/* Category Strengths */}
-      {Object.keys(analytics.categoryStrengths).length > 0 && (
+      {/* Skill Band Readiness */}
+      {skillBandRows.length > 0 && (
         <div className="bg-card rounded-2xl border border-white/10 p-4 space-y-3">
           <div className="flex items-center gap-2">
             <Target size={14} className="text-accent-light" />
-            <h2 className="text-sm font-medium text-white/60">Skill Categories</h2>
+            <h2 className="text-sm font-medium text-white/60">Skill Band Readiness</h2>
           </div>
-          {Object.entries(analytics.categoryStrengths)
-            .sort(([, a], [, b]) => a.avgRating - b.avgRating)
-            .map(([cat, data]) => (
-              <div key={cat} className="flex items-center gap-3">
-                <span className="text-xs text-white/50 w-20">{CAT_LABELS[cat] ?? cat}</span>
+          {skillBandRows.map((skill) => (
+            <div key={skill.skillKey} className="space-y-1">
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-white/50 w-32 truncate">{skill.label}</span>
                 <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
                   <div
-                    className={cn("h-full rounded-full", data.avgRating >= 3 ? "bg-success" : data.avgRating >= 2 ? "bg-accent" : data.avgRating >= 1 ? "bg-yellow-400" : "bg-warn")}
-                    style={{ width: `${(data.avgRating / 4) * 100}%` }}
+                    className="h-full rounded-full bg-accent"
+                    style={{ width: `${skill.pct}%` }}
                   />
                 </div>
-                <span className="text-[10px] text-white/30 w-8 text-right">{data.avgRating}/4</span>
+                <span className="text-[10px] text-white/30 w-14 text-right">{skill.points} pts</span>
               </div>
-            ))}
-        </div>
-      )}
-
-      {/* Recent Level-Ups */}
-      {analytics.recentLevelUps.length > 0 && (
-        <div className="bg-card rounded-2xl border border-white/10 p-4 space-y-2">
-          <h2 className="text-sm font-medium text-white/60">🎯 Recently Improved</h2>
-          {analytics.recentLevelUps.map((skill) => (
-            <MilestoneBar key={skill.id} name={skill.name} rating={skill.rating} level={skill.level} />
+              <div className="flex items-center justify-between text-[10px] text-white/30">
+                <span>{skill.currentBand}</span>
+                <span>{skill.readiness ? `${skill.readiness.readinessScore}% readiness` : skill.nextTarget ?? "Highest defined band reached"}</span>
+              </div>
+              {skill.readiness && (
+                <div className="grid grid-cols-2 gap-2 text-[10px] text-white/25">
+                  <span>P {skill.readiness.gates.points.current}/{skill.readiness.gates.points.target}</span>
+                  <span>Prof {skill.readiness.gates.proficiency.current}/{skill.readiness.gates.proficiency.target}</span>
+                  <span>Conf {skill.readiness.gates.confidence.current}/{skill.readiness.gates.confidence.target}</span>
+                  <span>Ev {skill.readiness.gates.evidence.current}/{skill.readiness.gates.evidence.target}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-[10px] text-white/25">
+                <span>{skill.nextTarget ?? "Highest defined band reached"}</span>
+              </div>
+            </div>
           ))}
         </div>
-      )}
-
-      {/* Full Skill Breakdown by Level */}
-      {Object.entries(groupedByLevel).length > 0 && (
-        <details className="bg-card rounded-2xl border border-white/10 p-4 space-y-3">
-          <summary className="text-sm font-medium cursor-pointer text-white/70">
-            Full Skill Breakdown
-          </summary>
-          <div className="pt-2 space-y-3">
-            {["A1", "A2", "B1", "B2"].map((level) => {
-              const skills = groupedByLevel[level];
-              if (!skills?.length) return null;
-              const levelData = analytics.levels[level];
-              return (
-                <div key={level} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={cn("w-2 h-2 rounded-full", LEVEL_COLORS[level] ?? "bg-white/20")} />
-                      <h3 className="text-sm font-medium">{level}</h3>
-                      <span className="text-[10px] text-white/30">{skills.length} skills</span>
-                    </div>
-                    {levelData && (
-                      <span className="text-[10px] text-white/30">
-                        {levelData.masteredPct}% mastered
-                      </span>
-                    )}
-                  </div>
-                  {levelData && (
-                    <div className="flex gap-1">
-                      {levelData.distribution.map((count, i) => (
-                        <div key={i} className="flex-1 text-center">
-                          <div
-                            className={cn(
-                              "h-1 rounded-full mx-0.5",
-                              i === 0 ? "bg-white/10" : i === 1 ? "bg-warn" : i === 2 ? "bg-yellow-400" : i === 3 ? "bg-accent" : "bg-success",
-                            )}
-                            style={{ opacity: count > 0 ? 1 : 0.2 }}
-                          />
-                          <span className="text-[8px] text-white/20">{count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    {skills.map((skill: { skillId: string; name: string; rating: number; level: string }) => (
-                      <MilestoneBar key={skill.skillId} name={skill.name} rating={skill.rating} level={skill.level} />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </details>
       )}
     </DashboardShell>
   );

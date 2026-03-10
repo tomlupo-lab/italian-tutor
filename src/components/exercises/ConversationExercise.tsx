@@ -91,6 +91,24 @@ export default function ConversationExercise({ content, onComplete }: Props) {
   const audioUrlRef = useRef<string | null>(null);
   const ttsRequestIdRef = useRef(0);
 
+  const getConversationMetrics = useCallback(
+    (finalMessages: ChatMessage[]) => {
+      const userMessages = finalMessages.filter(
+        (msg) => msg.role === "user" && msg.content.trim().length > 0,
+      );
+      const userText = userMessages.map((msg) => msg.content.toLowerCase()).join(" ");
+      const targetPhrasesUsed = c.target_phrases.filter((phrase) =>
+        userText.includes(phrase.toLowerCase()),
+      );
+
+      return {
+        userTurns: userMessages.length,
+        targetPhrasesUsed,
+      };
+    },
+    [c.target_phrases],
+  );
+
   const micSupported =
     typeof window !== "undefined" &&
     typeof navigator !== "undefined" &&
@@ -220,14 +238,18 @@ export default function ConversationExercise({ content, onComplete }: Props) {
 
   const finishConversation = useCallback(
     (finalErrors: ConversationError[], finalMessages: ChatMessage[]) => {
+      const { userTurns, targetPhrasesUsed } = getConversationMetrics(finalMessages);
       const result: ConversationResult = {
         messages: finalMessages.map((m) => ({ role: m.role, content: m.content })) as ConversationMessage[],
         errors: finalErrors,
         duration_ms: Date.now() - startTimeRef.current,
+        user_turns: userTurns,
+        target_phrases_used: targetPhrasesUsed,
+        target_phrases_total: c.target_phrases.length,
       };
       onComplete(result);
     },
-    [onComplete],
+    [c.target_phrases.length, getConversationMetrics, onComplete],
   );
 
   const sendMessage = useCallback(

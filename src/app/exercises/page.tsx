@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 import { apiPath } from "@/lib/paths";
 import Link from "next/link";
 import { getTodayWarsaw } from "@/lib/date";
+import { prettySkillLabel } from "@/lib/labels";
 
 type PracticeMode = "errors" | "random" | "typed";
 
@@ -38,6 +39,7 @@ export default function ExercisesPage() {
   const [done, setDone] = useState(false);
 
   const allCards = useQuery(api.cards.getAll);
+  const learnerProgress = useQuery(api.missions.getLearnerProgress, {});
   const practiceExercises = useQuery(
     api.exercises.getForPractice,
     selectedType ? { limit: 5, types: [selectedType] } : { limit: 5 },
@@ -52,6 +54,10 @@ export default function ExercisesPage() {
       .sort((a, b) => (b._creationTime ?? 0) - (a._creationTime ?? 0))
       .slice(0, 10);
   }, [allCards]);
+
+  const activeSkillBlockers = useMemo(() => {
+    return learnerProgress?.missions?.find((mission) => mission.active)?.skillBlockers ?? [];
+  }, [learnerProgress?.missions]);
 
   const startPractice = useCallback(
     async (selectedMode: PracticeMode, typeFilter?: string) => {
@@ -243,12 +249,17 @@ export default function ExercisesPage() {
           <div className="rounded-2xl border border-warn/30 bg-warn/10 p-4 space-y-1">
             <p className="text-[11px] text-warn uppercase tracking-wider">Recovery Focus</p>
             <p className="text-sm font-medium">
-              {recentErrors.length > 0
-                ? `Marco detected ${recentErrors.length} recent errors to target`
-                : "Run a focused recovery set"}
+              {activeSkillBlockers.length > 0
+                ? `Marco detected weak recent evidence in ${activeSkillBlockers
+                    .slice(0, 2)
+                    .map((blocker) => prettySkillLabel(blocker.skillKey) ?? blocker.skillKey)
+                    .join(" and ")}`
+                : recentErrors.length > 0
+                  ? `Marco detected ${recentErrors.length} recent errors to target`
+                  : "Run a focused recovery set"}
             </p>
             <p className="text-xs text-white/50">
-              Start with Error Drills first, then switch to Random Mix.
+              Start with recovery drills, then switch back to your mission once the weak-signal skills stabilize.
             </p>
           </div>
         )}

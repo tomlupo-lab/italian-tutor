@@ -11,7 +11,7 @@
 import type * as cards from "../cards.js";
 import type * as exerciseGenerator from "../exerciseGenerator.js";
 import type * as exercises from "../exercises.js";
-import type * as milestones from "../milestones.js";
+import type * as missionExerciseLibraryData from "../missionExerciseLibraryData.js";
 import type * as missions from "../missions.js";
 import type * as progressionCatalog from "../progressionCatalog.js";
 import type * as seed from "../seed.js";
@@ -27,7 +27,7 @@ declare const fullApi: ApiFromModules<{
   cards: typeof cards;
   exerciseGenerator: typeof exerciseGenerator;
   exercises: typeof exercises;
-  milestones: typeof milestones;
+  missionExerciseLibraryData: typeof missionExerciseLibraryData;
   missions: typeof missions;
   progressionCatalog: typeof progressionCatalog;
   seed: typeof seed;

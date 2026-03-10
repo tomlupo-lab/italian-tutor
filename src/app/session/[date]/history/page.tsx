@@ -25,6 +25,8 @@ type SessionRow = {
   }>;
   appliedCredits?: { bronze: number; silver: number; gold: number };
   checkpointAwardedId?: string;
+  checkpointPassed?: boolean;
+  goldContractStatus?: "strong" | "partial" | "missed";
   duplicatePenaltyApplied?: boolean;
 };
 
@@ -129,6 +131,15 @@ export default function SessionHistoryPage() {
                   </p>
                 )}
                 {session.checkpointAwardedId && <p>Checkpoint: {session.checkpointAwardedId}</p>}
+                {session.mode === "deep" && session.goldContractStatus === "strong" && (
+                  <p className="text-success">Gold checkpoint status: passed</p>
+                )}
+                {session.mode === "deep" && session.goldContractStatus === "partial" && (
+                  <p className="text-warn">Gold checkpoint status: partial completion</p>
+                )}
+                {session.mode === "deep" && session.goldContractStatus === "missed" && (
+                  <p className="text-warn">Gold checkpoint status: missed</p>
+                )}
                 {session.duplicatePenaltyApplied && <p className="text-warn">Duplicate-session penalty applied</p>}
               </div>
 

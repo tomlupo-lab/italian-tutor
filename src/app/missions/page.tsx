@@ -12,6 +12,8 @@ import {
   pickRunnableMode,
   type InventoryStatusResult,
 } from "@/lib/inventoryStatus";
+import { prettySkillLabel } from "@/lib/labels";
+import { computeSkillBandReadiness, describeCurrentBand, describeNextTarget, getSkillBandStatus } from "@/lib/skillBands";
 import type {
   CatalogMission,
   LearnerLevel,
@@ -22,12 +24,6 @@ import type {
 } from "@/lib/missionTypes";
 
 const LEVELS: Level[] = ["A1", "A2", "B1", "B2"];
-
-function prettySkill(skillKey: string): string {
-  return skillKey
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 export default function MissionsPage() {
   const [workingMissionId, setWorkingMissionId] = useState<string | null>(null);
@@ -93,11 +89,25 @@ export default function MissionsPage() {
     const optionalDone = doneInPool.filter((id) => !roadmap.requiredMissionIds.includes(id)).length;
     const requiredDone = roadmap.requiredMissionIds.filter((id) => completed.has(id)).length;
 
-    const skillMap = new Map((learner.skills ?? []).map((s) => [s.skillKey, s.points] as const));
-    const skillChecks = roadmap.skillThresholds.map((rule) => ({
-      ...rule,
-      current: skillMap.get(rule.skillKey) ?? 0,
-    }));
+    const skillMap = new Map((learner.skills ?? []).map((s) => [s.skillKey, s] as const));
+    const skillChecks = roadmap.skillThresholds.map((rule) => {
+      const skill = skillMap.get(rule.skillKey);
+      const currentPoints = skill?.points ?? 0;
+      const readiness = computeSkillBandReadiness(rule.skillKey, roadmap.level, {
+        points: currentPoints,
+        proficiency: skill?.proficiency ?? 0,
+        confidence: skill?.confidence ?? 0,
+        evidenceCount: skill?.evidenceCount ?? 0,
+      });
+      return {
+        ...rule,
+        current: currentPoints,
+        currentBand: describeCurrentBand(rule.skillKey, currentPoints),
+        nextTarget: describeNextTarget(rule.skillKey, currentPoints),
+        pct: readiness?.readinessScore ?? (getSkillBandStatus(rule.skillKey, currentPoints).progressToNextPct ?? 100),
+        readiness,
+      };
+    });
     const sessions = roadmap.sessionMinimums;
 
     return {
@@ -266,7 +276,7 @@ export default function MissionsPage() {
               )}
               {(activeMission?.criticalErrorsCount ?? 0) > 0 && (
                 <span className="text-[11px] text-warn">
-                  Blocker: {(activeMission?.criticalErrorsCount ?? 0)} critical errors
+                  Blocker: {(activeMission?.criticalErrorsCount ?? 0)} recovery signal{(activeMission?.criticalErrorsCount ?? 0) === 1 ? "" : "s"}
                 </span>
               )}
             </div>
@@ -294,9 +304,33 @@ export default function MissionsPage() {
           </p>
           <div className="pt-1 border-t border-white/10 space-y-1">
             {unlockChecklist.skillChecks.slice(0, 6).map((skill) => (
-              <p key={skill.skillKey} className="text-[11px] text-white/45">
-                {prettySkill(skill.skillKey)}: {skill.current}/{skill.minPoints}
-              </p>
+              <div key={skill.skillKey} className="space-y-1">
+                <div className="flex items-center justify-between gap-3 text-[11px] text-white/45">
+                  <span>{prettySkillLabel(skill.skillKey) ?? skill.skillKey}</span>
+                  <span>{skill.current}/{skill.minPoints}</span>
+                </div>
+                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-accent rounded-full"
+                    style={{ width: `${Math.max(4, Math.min(100, Math.round((skill.current / skill.minPoints) * 100)))}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-white/30">
+                  <span>{skill.currentBand}</span>
+                  <span>{skill.readiness ? `${skill.readiness.readinessScore}% readiness` : skill.nextTarget ?? "Threshold met"}</span>
+                </div>
+                {skill.readiness && (
+                  <div className="grid grid-cols-2 gap-2 text-[10px] text-white/25">
+                    <span>P {skill.readiness.gates.points.current}/{skill.readiness.gates.points.target}</span>
+                    <span>Prof {skill.readiness.gates.proficiency.current}/{skill.readiness.gates.proficiency.target}</span>
+                    <span>Conf {skill.readiness.gates.confidence.current}/{skill.readiness.gates.confidence.target}</span>
+                    <span>Ev {skill.readiness.gates.evidence.current}/{skill.readiness.gates.evidence.target}</span>
+                  </div>
+                )}
+                <div className="text-[10px] text-white/25">
+                  {skill.nextTarget ?? "Threshold met"}
+                </div>
+              </div>
             ))}
           </div>
           <Link href="/progress" className="inline-block text-[11px] text-accent-light">

@@ -111,24 +111,37 @@ export default function ErrorHuntExercise({ content, onComplete }: Props) {
       <div className="space-y-2">
         {c.sentences.map((s, i) => (
           <div key={i}>
-            <button
-              onClick={() => handleToggleFlag(i)}
-              disabled={phase !== "flag"}
-              className={cn(
-                "w-full text-left py-3 px-4 rounded-xl text-sm transition",
-                showResults
-                  ? s.has_error && flagged.has(i)
-                    ? "bg-success/10 border border-success/30"
-                    : s.has_error && !flagged.has(i)
-                      ? "bg-danger/10 border border-danger/30"
-                      : !s.has_error && flagged.has(i)
-                        ? "bg-warn/10 border border-warn/30"
-                        : "bg-white/5 border border-white/5"
-                  : flagged.has(i)
+            {phase === "flag" ? (
+              <button
+                onClick={() => handleToggleFlag(i)}
+                className={cn(
+                  "w-full text-left py-3 px-4 rounded-xl text-sm transition",
+                  flagged.has(i)
                     ? "bg-warn/10 border border-warn/30"
                     : "bg-white/5 border border-white/10 hover:border-white/20",
-              )}
-            >
+                )}
+              >
+                <div className="flex items-start gap-2">
+                  <span className="flex-1">{s.text}</span>
+                </div>
+              </button>
+            ) : (
+              <div
+                className={cn(
+                  "w-full text-left py-3 px-4 rounded-xl text-sm transition",
+                  showResults
+                    ? s.has_error && flagged.has(i)
+                      ? "bg-success/10 border border-success/30"
+                      : s.has_error && !flagged.has(i)
+                        ? "bg-danger/10 border border-danger/30"
+                        : !s.has_error && flagged.has(i)
+                          ? "bg-warn/10 border border-warn/30"
+                          : "bg-white/5 border border-white/5"
+                    : flagged.has(i)
+                      ? "bg-warn/10 border border-warn/30"
+                      : "bg-white/5 border border-white/10",
+                )}
+              >
               <div className="flex items-start gap-2">
                 <span className="flex-1">{s.text}</span>
                 {showResults &&
@@ -169,7 +182,8 @@ export default function ErrorHuntExercise({ content, onComplete }: Props) {
                   {s.explanation}
                 </p>
               )}
-            </button>
+              </div>
+            )}
           </div>
         ))}
       </div>

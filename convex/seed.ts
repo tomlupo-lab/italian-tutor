@@ -1,8 +1,47 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { MISSION_EXERCISE_LIBRARY } from "./missionExerciseLibraryData";
 
 // All vocab data inline to avoid importing from src/
 const allVocab = [
+  // ─── A1 Foundations: Daily Survival
+  { it: "ciao", en: "hi / hello", example: "Ciao, come stai?", tag: "basics", level: "A1" },
+  { it: "buongiorno", en: "good morning", example: "Buongiorno, signora.", tag: "basics", level: "A1" },
+  { it: "buonasera", en: "good evening", example: "Buonasera, avete un tavolo libero?", tag: "basics", level: "A1" },
+  { it: "per favore", en: "please", example: "Un caffè, per favore.", tag: "basics", level: "A1" },
+  { it: "grazie mille", en: "thank you very much", example: "Grazie mille per l'aiuto.", tag: "basics", level: "A1" },
+  { it: "mi chiamo...", en: "my name is...", example: "Mi chiamo Luca.", tag: "basics", level: "A1" },
+  { it: "come ti chiami?", en: "what is your name?", example: "Ciao, come ti chiami?", tag: "basics", level: "A1" },
+  { it: "non capisco", en: "I don't understand", example: "Scusi, non capisco.", tag: "basics", level: "A1" },
+  { it: "puoi ripetere?", en: "can you repeat?", example: "Puoi ripetere, per favore?", tag: "basics", level: "A1" },
+  { it: "parlo un po' di italiano", en: "I speak a little Italian", example: "Parlo un po' di italiano.", tag: "basics", level: "A1" },
+  { it: "vorrei", en: "I would like", example: "Vorrei un panino.", tag: "basics", level: "A1" },
+  { it: "ho bisogno di aiuto", en: "I need help", example: "Scusi, ho bisogno di aiuto.", tag: "basics", level: "A1" },
+  { it: "dov'è il bagno?", en: "where is the bathroom?", example: "Scusi, dov'è il bagno?", tag: "basics", level: "A1" },
+  { it: "quanto costa?", en: "how much does it cost?", example: "Quanto costa questo?", tag: "basics", level: "A1" },
+  { it: "a destra", en: "to the right", example: "La farmacia è a destra.", tag: "directions", level: "A1" },
+  { it: "a sinistra", en: "to the left", example: "La stazione è a sinistra.", tag: "directions", level: "A1" },
+  { it: "dritto", en: "straight ahead", example: "Vai sempre dritto.", tag: "directions", level: "A1" },
+  { it: "vicino", en: "near", example: "L'hotel è vicino alla stazione.", tag: "directions", level: "A1" },
+  { it: "lontano", en: "far", example: "Il supermercato è lontano.", tag: "directions", level: "A1" },
+  { it: "la stazione", en: "the station", example: "La stazione è qui vicino.", tag: "directions", level: "A1" },
+  { it: "il biglietto", en: "the ticket", example: "Vorrei un biglietto per Firenze.", tag: "travel", level: "A1" },
+  { it: "il binario", en: "the platform", example: "Da quale binario parte il treno?", tag: "travel", level: "A1" },
+  { it: "il treno è in ritardo", en: "the train is delayed", example: "Scusi, il treno è in ritardo?", tag: "travel", level: "A1" },
+  { it: "un tavolo per due", en: "a table for two", example: "Vorrei un tavolo per due.", tag: "food", level: "A1" },
+  { it: "il menù", en: "the menu", example: "Posso vedere il menù?", tag: "food", level: "A1" },
+  { it: "l'acqua naturale", en: "still water", example: "Per me, acqua naturale.", tag: "food", level: "A1" },
+  { it: "il conto, per favore", en: "the bill, please", example: "Scusi, il conto, per favore.", tag: "food", level: "A1" },
+  { it: "una camera singola", en: "a single room", example: "Avete una camera singola?", tag: "home", level: "A1" },
+  { it: "l'affitto al mese", en: "the monthly rent", example: "Quanto costa l'affitto al mese?", tag: "home", level: "A1" },
+  { it: "è incluso?", en: "is it included?", example: "Il wifi è incluso?", tag: "home", level: "A1" },
+  { it: "sono allergico/a a...", en: "I am allergic to...", example: "Sono allergico alle noccioline.", tag: "health", level: "A1" },
+  { it: "mi fa male la testa", en: "my head hurts", example: "Mi fa male la testa da stamattina.", tag: "health", level: "A1" },
+  { it: "ogni quanto?", en: "how often?", example: "Ogni quanto devo prendere questa medicina?", tag: "health", level: "A1" },
+  { it: "oggi", en: "today", example: "Oggi lavoro fino alle sei.", tag: "time", level: "A1" },
+  { it: "domani", en: "tomorrow", example: "Domani parto per Roma.", tag: "time", level: "A1" },
+  { it: "stasera", en: "this evening", example: "Stasera ceniamo fuori.", tag: "time", level: "A1" },
+  { it: "alle otto", en: "at eight", example: "Ci vediamo alle otto.", tag: "time", level: "A1" },
   // ─── Sport & Champions
   { it: "il fuoriclasse", en: "the champion / outstanding person", example: "Messi è un fuoriclasse assoluto.", tag: "sport", level: "B1" },
   { it: "la determinazione", en: "determination", example: "Senza determinazione non si arriva da nessuna parte.", tag: "sport", level: "B1" },
@@ -333,5 +372,89 @@ export const backfillLevels = mutation({
       }
     }
     return { updated };
+  },
+});
+
+export const resetAppState = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const tablesToClear = [
+      "exerciseEvidence",
+      "sessions",
+      "exercises",
+      "userMissionProgress",
+      "userSkillProgress",
+      "userLevelProgress",
+      "cards",
+    ] as const;
+
+    const deleted: Record<string, number> = {};
+    for (const table of tablesToClear) {
+      const rows = await ctx.db.query(table).collect();
+      deleted[table] = rows.length;
+      for (const row of rows) {
+        await ctx.db.delete(row._id);
+      }
+    }
+
+    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
+    let seededCards = 0;
+    for (const card of allVocab) {
+      await ctx.db.insert("cards", {
+        it: card.it,
+        en: card.en,
+        example: card.example,
+        tag: card.tag,
+        level: card.level,
+        source: "builtin" as const,
+        ease: 2.5,
+        interval: 0,
+        repetitions: 0,
+        nextReview: today,
+      });
+      seededCards++;
+    }
+
+    return {
+      status: "reset",
+      deleted,
+      seededCards,
+    };
+  },
+});
+
+export const seedMissionExerciseLibrary = mutation({
+  args: {
+    missionId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const entries = args.missionId
+      ? MISSION_EXERCISE_LIBRARY.filter((entry) => entry.missionId === args.missionId)
+      : MISSION_EXERCISE_LIBRARY;
+
+    let inserted = 0;
+    let updated = 0;
+    for (const entry of entries) {
+      const payload = entry as any;
+      const existing = await ctx.db
+        .query("missionExerciseLibrary")
+        .withIndex("by_mission_order", (q) => q.eq("missionId", payload.missionId).eq("order", payload.order))
+        .first();
+
+      if (existing) {
+        await ctx.db.patch(existing._id, payload);
+        updated += 1;
+      } else {
+        await ctx.db.insert("missionExerciseLibrary", payload);
+        inserted += 1;
+      }
+    }
+
+    return {
+      missionId: args.missionId ?? "all",
+      inserted,
+      updated,
+      total: entries.length,
+    };
   },
 });

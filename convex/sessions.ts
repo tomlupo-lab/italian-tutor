@@ -61,6 +61,10 @@ export const attachMissionOutcome = mutation({
     sessionId: v.id("sessions"),
     missionId: v.string(),
     checkpointAwardedId: v.optional(v.string()),
+    checkpointPassed: v.optional(v.boolean()),
+    goldContractStatus: v.optional(
+      v.union(v.literal("strong"), v.literal("partial"), v.literal("missed"))
+    ),
     duplicatePenaltyApplied: v.boolean(),
     appliedCredits: v.object({
       bronze: v.number(),
@@ -74,6 +78,8 @@ export const attachMissionOutcome = mutation({
     await ctx.db.patch(args.sessionId, {
       missionId: args.missionId,
       checkpointAwardedId: args.checkpointAwardedId,
+      checkpointPassed: args.checkpointPassed,
+      goldContractStatus: args.goldContractStatus,
       duplicatePenaltyApplied: args.duplicatePenaltyApplied,
       appliedCredits: args.appliedCredits,
     });

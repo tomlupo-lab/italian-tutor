@@ -175,6 +175,9 @@ export interface ConversationResult {
   messages: ConversationMessage[];
   errors: ConversationError[];
   duration_ms: number;
+  user_turns: number;
+  target_phrases_used: string[];
+  target_phrases_total: number;
 }
 
 export interface ReflectionResult {

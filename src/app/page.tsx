@@ -138,14 +138,14 @@ export default function Home() {
     const silverTarget = activeProgress.mission.exerciseTargets.silverDrills || 0;
     const goldTarget = activeProgress.mission.exerciseTargets.goldConversations || 0;
     const totalTarget = bronzeTarget + silverTarget + goldTarget;
-    const totalDone =
-      (activeProgress.active.credits?.bronze ?? 0) +
-      (activeProgress.active.credits?.silver ?? 0) +
-      (activeProgress.active.credits?.gold ?? 0);
+    const bronzeDone = Math.min(activeProgress.active.credits?.bronze ?? 0, bronzeTarget);
+    const silverDone = Math.min(activeProgress.active.credits?.silver ?? 0, silverTarget);
+    const goldDone = Math.min(activeProgress.active.credits?.gold ?? 0, goldTarget);
+    const totalDone = bronzeDone + silverDone + goldDone;
     return {
       totalDone,
       totalTarget,
-      percent: totalTarget > 0 ? Math.min(100, Math.round((totalDone / totalTarget) * 100)) : 0,
+      percent: totalTarget > 0 ? Math.round((totalDone / totalTarget) * 100) : 0,
     };
   }, [activeProgress]);
 
@@ -317,18 +317,15 @@ export default function Home() {
             <div className="space-y-1.5 pt-1">
             {(["quick", "standard", "deep"] as ExerciseMode[]).map((mode) => {
                 const unavailable = !activeProgress.mission;
-                const recommended = runnableRecommendedMode === mode && !unavailable && !activeProgress.blocker;
                 return (
                   <button
                     key={mode}
                     type="button"
                     onClick={() => handleModeSelect(mode)}
                     disabled={unavailable || generating}
-                    className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
-                      recommended
-                        ? "border-accent/50 bg-accent/10"
-                        : "border-white/10 bg-white/[0.03]"
-                    } ${unavailable || generating ? "opacity-50 cursor-not-allowed" : "hover:bg-white/[0.06]"}`}
+                    className={`w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left transition ${
+                      unavailable || generating ? "opacity-50 cursor-not-allowed" : "hover:bg-white/[0.06]"
+                    }`}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -339,11 +336,6 @@ export default function Home() {
                         </div>
                       </div>
                     <div className="flex items-center gap-2 text-right">
-                      {recommended && (
-                        <Badge tone="accent" className="px-1.5 border-0">
-                          Now
-                        </Badge>
-                      )}
                       <p className="text-[10px] text-white/35">
                         <span className="uppercase tracking-wide mr-1">Sessions remaining</span>
                         <Badge tone="level" className="px-2 py-0.5 text-[10px]">

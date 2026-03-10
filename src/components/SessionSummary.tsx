@@ -63,6 +63,19 @@ interface RecentSessionOutcome {
   _creationTime?: number;
 }
 
+const ERROR_CAT_LABELS: Record<string, string> = {
+  cloze: "Fill-in-the-blank",
+  word_order: "Word order",
+  grammar_pattern: "Grammar patterns",
+  translation: "Translation",
+  error_recognition: "Error spotting",
+  grammar: "Grammar",
+  vocab: "Vocabulary",
+  functional: "Functional",
+  unknown: "General",
+  other: "General",
+};
+
 export default function SessionSummary({
   mode,
   exercisesCompleted,
@@ -93,6 +106,20 @@ export default function SessionSummary({
     return allCards.filter(
       (c) => c.source === "correction" && (c._creationTime ?? 0) > twoMinAgo,
     ).length;
+  }, [allCards]);
+
+  const recentCorrectionSummary = useMemo(() => {
+    if (!allCards) return null;
+    const correctionCards = allCards.filter((card) => card.source === "correction");
+    if (correctionCards.length === 0) return null;
+    const byCategory: Record<string, number> = {};
+    for (const card of correctionCards) {
+      const category = card.errorCategory || "other";
+      byCategory[category] = (byCategory[category] ?? 0) + 1;
+    }
+    return Object.entries(byCategory)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3);
   }, [allCards]);
 
   // ── Weekly trend ──────────────────────────────────────────────────
@@ -318,27 +345,27 @@ export default function SessionSummary({
           {latestMissionOutcome && (
             <div className="pt-2 border-t border-white/10 space-y-1">
               {latestMissionOutcome.checkpointAwardedId && (
-                  <p className="text-[11px] text-success">Checkpoint advanced in this session</p>
+                  <p className="text-[11px] text-success">Checkpoint advanced</p>
               )}
               {latestMissionOutcome.mode === "deep" && latestMissionOutcome.goldContractStatus === "strong" && (
-                <p className="text-[11px] text-success">Gold checkpoint status: passed</p>
+                <p className="text-[11px] text-success">Conversation completed and checkpoint advanced.</p>
               )}
               {latestMissionOutcome.mode === "deep" &&
                 latestMissionOutcome.goldContractStatus === "partial" &&
                 !latestMissionOutcome.checkpointAwardedId && (
                   <p className="text-[11px] text-warn">
-                    Gold checkpoint status: partial completion. Mission progress applied, checkpoint not advanced.
+                    Conversation completed, but the checkpoint did not advance.
                   </p>
                 )}
               {latestMissionOutcome.mode === "deep" &&
                 latestMissionOutcome.goldContractStatus === "missed" && (
                   <p className="text-[11px] text-warn">
-                    Gold checkpoint status: missed. Finish the full contract to advance the checkpoint.
+                    Conversation did not meet the checkpoint requirement.
                   </p>
                 )}
               {latestMissionOutcome.duplicatePenaltyApplied && (
                 <p className="text-[11px] text-warn">
-                  Repeat pattern detected today: reduced mission credits applied
+                  Repeat session today: less mission progress counted.
                 </p>
               )}
               {latestMissionOutcome.appliedCredits && (
@@ -415,6 +442,28 @@ export default function SessionSummary({
           </div>
         )}
       </div>
+
+      {recentCorrectionSummary && (
+        <div className="bg-card rounded-xl border border-white/10 p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <BookOpen size={14} className="text-warn" />
+            <span className="text-xs font-medium text-white/60">Error review</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {recentCorrectionSummary.map(([category, count]) => (
+              <span key={category} className="rounded-full bg-warn/10 px-2 py-0.5 text-[10px] text-warn/80">
+                {ERROR_CAT_LABELS[category] ?? category} ({count})
+              </span>
+            ))}
+          </div>
+          <Link
+            href="/exercises?focus=recovery"
+            className="inline-block text-[11px] text-warn"
+          >
+            Review recent mistakes
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

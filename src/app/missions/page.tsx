@@ -30,6 +30,10 @@ function prettySkill(skillKey: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function checklistTone(done: boolean) {
+  return done ? "text-success" : "text-white/45";
+}
+
 export default function MissionsPage() {
   const [workingMissionId, setWorkingMissionId] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
@@ -282,25 +286,56 @@ export default function MissionsPage() {
           <p className="text-xs text-white/45">
             Requirements from your {currentLevel} track
           </p>
-          <p className="text-xs text-white/45">
-            Required missions: {unlockChecklist.requiredDone}/{unlockChecklist.requiredTotal}
-          </p>
-          <p className="text-xs text-white/45">
-            Total missions: {unlockChecklist.completedDone}/{unlockChecklist.completedTarget}
-          </p>
-          <p className="text-xs text-white/45">
-            Optional missions: {unlockChecklist.optionalDone}/{unlockChecklist.optionalTarget}
-          </p>
-          <p className="text-xs text-white/45">
-            Level totals: Bronze {Math.min(unlockChecklist.currentTier.bronze, unlockChecklist.sessions.bronze)}/{unlockChecklist.sessions.bronze} · Silver {Math.min(unlockChecklist.currentTier.silver, unlockChecklist.sessions.silver)}/{unlockChecklist.sessions.silver} · Gold {Math.min(unlockChecklist.currentTier.gold, unlockChecklist.sessions.gold)}/{unlockChecklist.sessions.gold}
-          </p>
-          <p className="text-xs text-white/45">
-            Time and consistency: {Math.min(unlockChecklist.currentMinutes, unlockChecklist.sessions.minutes)}/{unlockChecklist.sessions.minutes} min · {Math.min(unlockChecklist.currentDays, unlockChecklist.sessions.activeDays)}/{unlockChecklist.sessions.activeDays} days
-          </p>
+          <div className="space-y-1 pt-1">
+            <p className={cn("text-xs", checklistTone(unlockChecklist.requiredDone >= unlockChecklist.requiredTotal))}>
+              {unlockChecklist.requiredDone >= unlockChecklist.requiredTotal ? "✓" : "•"} Required missions ({unlockChecklist.requiredDone}/{unlockChecklist.requiredTotal})
+            </p>
+            <p className={cn("text-xs", checklistTone(unlockChecklist.completedDone >= unlockChecklist.completedTarget))}>
+              {unlockChecklist.completedDone >= unlockChecklist.completedTarget ? "✓" : "•"} Total missions ({unlockChecklist.completedDone}/{unlockChecklist.completedTarget})
+            </p>
+            <p className={cn("text-xs", checklistTone(unlockChecklist.optionalDone >= unlockChecklist.optionalTarget))}>
+              {unlockChecklist.optionalDone >= unlockChecklist.optionalTarget ? "✓" : "•"} Optional missions ({unlockChecklist.optionalDone}/{unlockChecklist.optionalTarget})
+            </p>
+            <p
+              className={cn(
+                "text-xs",
+                checklistTone(
+                  unlockChecklist.currentTier.bronze >= unlockChecklist.sessions.bronze &&
+                    unlockChecklist.currentTier.silver >= unlockChecklist.sessions.silver &&
+                    unlockChecklist.currentTier.gold >= unlockChecklist.sessions.gold,
+                ),
+              )}
+            >
+              {unlockChecklist.currentTier.bronze >= unlockChecklist.sessions.bronze &&
+              unlockChecklist.currentTier.silver >= unlockChecklist.sessions.silver &&
+              unlockChecklist.currentTier.gold >= unlockChecklist.sessions.gold
+                ? "✓"
+                : "•"}{" "}
+              Level totals (Bronze {Math.min(unlockChecklist.currentTier.bronze, unlockChecklist.sessions.bronze)}/{unlockChecklist.sessions.bronze} · Silver {Math.min(unlockChecklist.currentTier.silver, unlockChecklist.sessions.silver)}/{unlockChecklist.sessions.silver} · Gold {Math.min(unlockChecklist.currentTier.gold, unlockChecklist.sessions.gold)}/{unlockChecklist.sessions.gold})
+            </p>
+            <p
+              className={cn(
+                "text-xs",
+                checklistTone(
+                  unlockChecklist.currentMinutes >= unlockChecklist.sessions.minutes &&
+                    unlockChecklist.currentDays >= unlockChecklist.sessions.activeDays,
+                ),
+              )}
+            >
+              {unlockChecklist.currentMinutes >= unlockChecklist.sessions.minutes &&
+              unlockChecklist.currentDays >= unlockChecklist.sessions.activeDays
+                ? "✓"
+                : "•"}{" "}
+              Time and consistency ({Math.min(unlockChecklist.currentMinutes, unlockChecklist.sessions.minutes)}/{unlockChecklist.sessions.minutes} min · {Math.min(unlockChecklist.currentDays, unlockChecklist.sessions.activeDays)}/{unlockChecklist.sessions.activeDays} days)
+            </p>
+          </div>
           <div className="pt-1 border-t border-white/10 space-y-1">
             {unlockChecklist.skillChecks.slice(0, 6).map((skill) => (
-              <p key={skill.skillKey} className="text-[11px] text-white/45">
-                {prettySkill(skill.skillKey)}: {Math.min(skill.current, skill.minPoints)}/{skill.minPoints}
+              <p
+                key={skill.skillKey}
+                className={cn("text-[11px]", checklistTone(skill.current >= skill.minPoints))}
+              >
+                {skill.current >= skill.minPoints ? "✓" : "•"} {prettySkill(skill.skillKey)} ({Math.min(skill.current, skill.minPoints)}/{skill.minPoints})
               </p>
             ))}
           </div>
@@ -344,6 +379,11 @@ export default function MissionsPage() {
                 const nextCheckpoint = (mission.checkpoints ?? []).find(
                   (cp) => !(progress?.completedCheckpointIds ?? []).includes(cp.id),
                 );
+                const blockers = [
+                  bronze < mission.exerciseTargets.bronzeReviews ? `Bronze ${bronze}/${mission.exerciseTargets.bronzeReviews}` : null,
+                  silver < mission.exerciseTargets.silverDrills ? `Silver ${silver}/${mission.exerciseTargets.silverDrills}` : null,
+                  gold < mission.exerciseTargets.goldConversations ? `Gold ${gold}/${mission.exerciseTargets.goldConversations}` : null,
+                ].filter(Boolean) as string[];
 
                 return (
                   <div
@@ -372,31 +412,26 @@ export default function MissionsPage() {
                       )}
                     </div>
 
-                    <div className="mt-2 text-[11px] text-white/45 space-y-0.5">
-                      <p>Bronze progress {bronze}/{mission.exerciseTargets.bronzeReviews}</p>
-                      <p>Silver progress {silver}/{mission.exerciseTargets.silverDrills}</p>
-                      <p>Gold progress {gold}/{mission.exerciseTargets.goldConversations}</p>
-                      {requiredCheckpointTotal > 0 && (
-                        <p>Checkpoints {completedCheckpointCount}/{requiredCheckpointTotal}</p>
-                      )}
-                    </div>
-                    {mission.checkpoints && mission.checkpoints.length > 0 && (
-                      <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.02] p-2 space-y-1">
-                        <p className="text-[10px] text-white/35 uppercase tracking-wider">Checkpoint Path</p>
-                        {mission.checkpoints.slice(0, 4).map((cp) => {
-                          const done = (progress?.completedCheckpointIds ?? []).includes(cp.id);
-                          return (
-                            <p key={cp.id} className={cn("text-[11px]", done ? "text-success" : "text-white/50")}>
-                              {done ? "✓" : "•"} {cp.title}
-                              {cp.required ? "" : " (optional)"}
-                            </p>
-                          );
-                        })}
-                        {nextCheckpoint && (
-                          <p className="text-[11px] text-accent-light pt-0.5">
-                            Next: {nextCheckpoint.title} (min {nextCheckpoint.minScore}%)
+                    {completed ? (
+                      <p className="mt-2 text-[11px] text-success">Mission complete</p>
+                    ) : (
+                      <div className="mt-2 space-y-1 text-[11px]">
+                        {blockers.length > 0 && (
+                          <p className="text-white/45">Still needed: {blockers.join(" · ")}</p>
+                        )}
+                        {requiredCheckpointTotal > 0 && (
+                          <p className="text-white/45">
+                            Required checkpoints {completedCheckpointCount}/{requiredCheckpointTotal}
                           </p>
                         )}
+                      </div>
+                    )}
+                    {nextCheckpoint && (
+                      <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.02] p-2 space-y-1">
+                        <p className="text-[10px] text-white/35 uppercase tracking-wider">Next checkpoint</p>
+                        <p className="text-[11px] text-accent-light">
+                          {nextCheckpoint.title} (min {nextCheckpoint.minScore}%)
+                        </p>
                       </div>
                     )}
 

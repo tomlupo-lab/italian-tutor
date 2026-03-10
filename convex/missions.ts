@@ -521,12 +521,16 @@ export const recordLessonCompletion = mutation({
     const duplicateSameDay = sigIdx >= 0 && currentSignatures[sigIdx].count > 0;
     const antiFarmMultiplier = duplicateSameDay ? 0.35 : 1;
     const creditMultiplier = qualityMultiplier * antiFarmMultiplier;
+    const bronzeSessionCredit =
+      args.mode === "quick" && args.bronzeCredit > 0
+        ? Math.max(1, Math.round(args.scorePercent / 10))
+        : args.bronzeCredit;
     const silverSessionCredit =
       args.mode === "standard" && args.silverCredit > 0
         ? Math.max(1, Math.round(args.scorePercent / 10))
         : args.silverCredit;
     const appliedBronzeCredit =
-      args.bronzeCredit > 0 ? Math.max(0, Math.round(args.bronzeCredit * creditMultiplier)) : 0;
+      bronzeSessionCredit > 0 ? Math.max(0, Math.round(bronzeSessionCredit * creditMultiplier)) : 0;
     const appliedSilverCredit =
       silverSessionCredit > 0 ? Math.max(0, Math.round(silverSessionCredit * creditMultiplier)) : 0;
     const appliedGoldCredit =

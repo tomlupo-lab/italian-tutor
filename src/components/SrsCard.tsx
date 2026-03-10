@@ -53,11 +53,11 @@ export default function SrsCard({
     (quality: number) => {
       if (pendingQuality !== null) return;
       setPendingQuality(quality);
+      onRate(quality);
       submitTimerRef.current = window.setTimeout(() => {
         setPendingQuality(null);
         setFlipped(false);
-        onRate(quality);
-      }, 2200);
+      }, 1200);
     },
     [onRate, pendingQuality],
   );

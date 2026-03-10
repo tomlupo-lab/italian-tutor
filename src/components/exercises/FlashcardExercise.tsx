@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ExerciseResult, SrsContent, SrsResult } from "@/lib/exerciseTypes";
 import Flashcard from "@/components/Flashcard";
 import type { VocabCard } from "@/data/vocab";
+import { speakItalian } from "@/components/Flashcard";
 
 interface Props {
   content: unknown;
@@ -23,6 +24,10 @@ export default function FlashcardExercise({ content, onComplete }: Props) {
     tag: c.tag,
     level: c.level as VocabCard["level"] | undefined,
   };
+
+  useEffect(() => {
+    speakItalian(card.it, 0.85);
+  }, [card.it]);
 
   const handleRate = useCallback(
     (quality: number) => {

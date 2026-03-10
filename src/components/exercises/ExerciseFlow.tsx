@@ -229,7 +229,7 @@ export default function ExerciseFlow({
   }
 
   return (
-    <div className={`max-w-lg mx-auto px-4 ${isQuickMode ? "py-2" : "py-4"} flex flex-col gap-4 pb-20`}>
+    <div className={`${isQuickMode ? "max-w-xl" : "max-w-lg"} mx-auto px-4 ${isQuickMode ? "py-2" : "py-4"} flex flex-col gap-4 pb-20`}>
       {!isQuickMode && (
         <div className="rounded-xl border border-white/10 bg-card/40 px-3 py-2">
           <p className="text-[10px] text-accent-light uppercase tracking-wider">

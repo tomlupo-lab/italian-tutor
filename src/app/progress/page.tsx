@@ -4,6 +4,8 @@ import { useProgressAnalytics } from "@/hooks/useProgressAnalytics";
 import MilestoneBar from "@/components/MilestoneBar";
 import {
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Flame,
   Loader2,
   TrendingUp,
@@ -21,11 +23,21 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { DashboardShell } from "@/components/layout/ScreenShell";
+import { useRouter } from "next/navigation";
+import { getNowWarsaw } from "@/lib/date";
+import ModeSelector from "@/components/ModeSelector";
+import {
+  inventoryToExerciseCounts,
+  pickRunnableMode,
+  type InventoryStatusResult,
+} from "@/lib/inventoryStatus";
 import type {
   ActiveMissionResult,
+  CatalogMission,
   LearnerMission,
+  Level,
 } from "@/lib/missionTypes";
 
 const MODE_META: { mode: string; label: string; emoji: string; color: string }[] = [
@@ -63,6 +75,23 @@ const ERROR_CAT_LABELS: Record<string, string> = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyCard = Record<string, any>;
 
+const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
+
+type DayStatus = "gold" | "silver" | "bronze" | "ready" | "empty" | "future";
+
+interface DayInfo {
+  date: string;
+  day: number;
+  status: DayStatus;
+  hasExercises: boolean;
+  sessionCount: number;
+  checkpointCount: number;
+}
+
+function formatDate(y: number, m: number, d: number) {
+  return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
 function TrendIcon({ trend }: { trend: string }) {
   if (trend === "up") return <TrendingUp size={14} className="text-success" />;
   if (trend === "down") return <TrendingDown size={14} className="text-warn" />;
@@ -70,6 +99,11 @@ function TrendIcon({ trend }: { trend: string }) {
 }
 
 export default function ProgressPage() {
+  const router = useRouter();
+  const { year: wYear, month: wMonth, dateStr: todayStr } = getNowWarsaw();
+  const [year, setYear] = useState(wYear);
+  const [month, setMonth] = useState(wMonth);
+  const [selectedDate, setSelectedDate] = useState<string | null>(todayStr);
   const analytics = useProgressAnalytics();
   const stats = useQuery(api.sessions.getStats);
   const recentSessions = useQuery(api.sessions.listRecent, { limit: 200 });
@@ -79,7 +113,25 @@ export default function ProgressPage() {
   const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
     | { missions: LearnerMission[] }
     | undefined;
+  const catalog = useQuery(api.missions.listCatalog, {}) as
+    | { missions: CatalogMission[] }
+    | undefined;
   const activeProgress = learnerProgress?.missions?.find((m) => m.active);
+  const from = formatDate(year, month, 1);
+  const to = formatDate(year, month, new Date(year, month + 1, 0).getDate());
+  const exerciseSummaries = useQuery(api.exercises.getDateSummaries, { from, to });
+  const calendarSessions = useQuery(api.sessions.getByDateRange, { from, to });
+  const dueCards = useQuery(api.cards.getDue, { limit: 999 });
+  const selectedInventoryStatus = useQuery(
+    api.exercises.getInventoryStatus,
+    selectedDate ? { date: selectedDate } : "skip",
+  ) as InventoryStatusResult | undefined;
+  const selectedMissionInventoryStatus = useQuery(
+    api.exercises.getInventoryStatus,
+    selectedDate && activeMission?.missionId
+      ? { date: selectedDate, missionId: activeMission.missionId }
+      : "skip",
+  ) as InventoryStatusResult | undefined;
 
   // Correction cards — recent mistakes to review
   const corrections = useMemo(() => {
@@ -95,6 +147,107 @@ export default function ProgressPage() {
       .slice(0, 8);
     return { recent, byCategory, total: correctionCards.length };
   }, [allCards]);
+
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
+  const startOffset = (firstDayOfMonth + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const exerciseDates = useMemo(() => {
+    const set = new Set<string>();
+    if (exerciseSummaries) {
+      for (const summary of exerciseSummaries) set.add(summary.date);
+    }
+    return set;
+  }, [exerciseSummaries]);
+
+  const completedModes = useMemo(() => {
+    const map: Record<string, { quick: number; standard: number; deep: number; total: number; checkpoints: number }> = {};
+    if (calendarSessions) {
+      for (const session of calendarSessions) {
+        if (!map[session.date]) map[session.date] = { quick: 0, standard: 0, deep: 0, total: 0, checkpoints: 0 };
+        if (session.mode === "quick") map[session.date].quick += 1;
+        if (session.mode === "standard") map[session.date].standard += 1;
+        if (session.mode === "deep") map[session.date].deep += 1;
+        if (session.checkpointAwardedId) map[session.date].checkpoints += 1;
+        map[session.date].total += 1;
+      }
+    }
+    return map;
+  }, [calendarSessions]);
+
+  function getTierStatus(date: string, hasExercises: boolean, isFuture: boolean): DayStatus {
+    if (isFuture && !hasExercises) return "future";
+    if (!hasExercises) return "empty";
+    const modes = completedModes[date];
+    if (!modes || modes.total === 0) return "ready";
+    if (modes.deep > 0) return "gold";
+    if (modes.standard > 0) return "silver";
+    if (modes.quick > 0) return "bronze";
+    return "ready";
+  }
+
+  const days: (DayInfo | null)[] = useMemo(() => {
+    const result: (DayInfo | null)[] = [];
+    for (let i = 0; i < startOffset; i++) result.push(null);
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = formatDate(year, month, d);
+      const hasExercises = exerciseDates.has(date) || (date === todayStr && (dueCards?.length ?? 0) > 0);
+      const isFuture = date > todayStr;
+      result.push({
+        date,
+        day: d,
+        status: getTierStatus(date, hasExercises, isFuture),
+        hasExercises,
+        sessionCount: completedModes[date]?.total ?? 0,
+        checkpointCount: completedModes[date]?.checkpoints ?? 0,
+      });
+    }
+    return result;
+  }, [completedModes, daysInMonth, dueCards, exerciseDates, month, startOffset, todayStr, year]);
+
+  const exerciseCounts = useMemo(() => {
+    const inventory = activeMission?.missionId ? selectedMissionInventoryStatus : selectedInventoryStatus;
+    if (!inventory) return {};
+    const dueCardsCount = selectedDate === todayStr ? (dueCards?.length ?? 0) : 0;
+    return inventoryToExerciseCounts(inventory, dueCardsCount);
+  }, [activeMission?.missionId, dueCards, selectedDate, selectedInventoryStatus, selectedMissionInventoryStatus, todayStr]);
+
+  const selectedHasExercises = useMemo(
+    () => Object.values(exerciseCounts).some((count) => count > 0),
+    [exerciseCounts],
+  );
+  const selectedSessionStats = selectedDate ? completedModes[selectedDate] : null;
+  const selectedIsPast = Boolean(selectedDate && selectedDate < todayStr);
+  const suggestedMode = useMemo(() => {
+    const inventory = activeMission?.missionId ? selectedMissionInventoryStatus : selectedInventoryStatus;
+    if (!inventory) return undefined;
+    const dueCardsCount = selectedDate === todayStr ? (dueCards?.length ?? 0) : 0;
+    const active = learnerProgress?.missions?.find((m) => m.active);
+    const mission = active ? catalog?.missions?.find((m) => m.missionId === active.missionId) : null;
+
+    if (selectedDate === todayStr && active && mission) {
+      const bronzeMissing = mission.exerciseTargets.bronzeReviews - (active.credits?.bronze ?? 0);
+      const silverMissing = mission.exerciseTargets.silverDrills - (active.credits?.silver ?? 0);
+      const goldMissing = mission.exerciseTargets.goldConversations - (active.credits?.gold ?? 0);
+      const preferred =
+        goldMissing > 0 ? "deep" : silverMissing > 0 ? "standard" : bronzeMissing > 0 ? "quick" : "standard";
+      return pickRunnableMode(preferred, inventory, dueCardsCount) ?? undefined;
+    }
+
+    return pickRunnableMode("standard", inventory, dueCardsCount) ?? undefined;
+  }, [
+    activeMission?.missionId,
+    catalog?.missions,
+    dueCards,
+    learnerProgress?.missions,
+    selectedDate,
+    selectedInventoryStatus,
+    selectedMissionInventoryStatus,
+    todayStr,
+  ]);
+
+  const monthName = new Date(year, month).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   // Weekly activity chart (last 8 weeks)
   const weeklyTrends = useMemo(() => {
@@ -195,6 +348,147 @@ export default function ProgressPage() {
           <Link href="/missions" className="text-[11px] text-accent-light">Open mission hub</Link>
           <Link href="/exercises?focus=recovery" className="text-[11px] text-warn">Run recovery drills</Link>
         </div>
+      </div>
+
+      <div className="bg-card rounded-2xl border border-white/10 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BarChart3 size={14} className="text-accent-light" />
+            <h2 className="text-sm font-medium text-white/60">Activity Calendar</h2>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                if (month === 0) {
+                  setYear(year - 1);
+                  setMonth(11);
+                } else {
+                  setMonth(month - 1);
+                }
+                setSelectedDate(null);
+              }}
+              className="p-1.5 rounded-lg hover:bg-white/5 transition"
+              aria-label="Previous month"
+            >
+              <ChevronLeft size={16} className="text-white/60" />
+            </button>
+            <button
+              onClick={() => {
+                setYear(wYear);
+                setMonth(wMonth);
+                setSelectedDate(todayStr);
+              }}
+              className="px-2 py-1 rounded-lg hover:bg-white/5 transition text-xs font-medium"
+            >
+              {monthName}
+            </button>
+            <button
+              onClick={() => {
+                if (month === 11) {
+                  setYear(year + 1);
+                  setMonth(0);
+                } else {
+                  setMonth(month + 1);
+                }
+                setSelectedDate(null);
+              }}
+              className="p-1.5 rounded-lg hover:bg-white/5 transition"
+              aria-label="Next month"
+            >
+              <ChevronRight size={16} className="text-white/60" />
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1">
+          {WEEKDAYS.map((day) => (
+            <div key={day} className="text-center text-[9px] text-white/25 font-medium py-0.5">
+              {day}
+            </div>
+          ))}
+          {days.map((day, i) => {
+            if (!day) return <div key={`pad-${i}`} />;
+            const selected = selectedDate === day.date;
+            const today = day.date === todayStr;
+            return (
+              <button
+                key={day.date}
+                onClick={() => setSelectedDate(selected ? null : day.date)}
+                className={cn(
+                  "relative h-9 rounded-md flex items-center justify-center text-xs transition",
+                  selected && "ring-1.5 ring-white/50",
+                  today && "font-bold",
+                  day.status === "gold" && "bg-yellow-500/20 text-yellow-400",
+                  day.status === "silver" && "bg-slate-400/20 text-slate-300",
+                  day.status === "bronze" && "bg-amber-700/20 text-amber-500",
+                  day.status === "ready" && "bg-accent/15 text-accent-light",
+                  day.status === "empty" && "text-white/15",
+                  day.status === "future" && "text-white/10",
+                )}
+              >
+                {day.day}
+                {day.sessionCount > 1 && (
+                  <span className="absolute -bottom-0.5 -right-0.5 min-w-3 h-3 px-0.5 rounded-full bg-white/15 text-[8px] leading-3 text-white/80">
+                    {day.sessionCount}
+                  </span>
+                )}
+                {day.checkpointCount > 0 && (
+                  <span className="absolute -top-0.5 -left-0.5 w-2 h-2 rounded-full bg-success" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-center gap-3 pt-1 border-t border-white/5">
+          <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-accent" /><span className="text-[9px] text-white/25">Ready</span></div>
+          <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-600" /><span className="text-[9px] text-white/25">Bronze</span></div>
+          <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-slate-400" /><span className="text-[9px] text-white/25">Silver</span></div>
+          <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-yellow-500" /><span className="text-[9px] text-white/25">Gold</span></div>
+        </div>
+
+        {selectedDate && (
+          <div className="pt-2 border-t border-white/10 space-y-3">
+            <p className="text-xs text-white/35 text-center">
+              {new Date(`${selectedDate}T12:00:00`).toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "short",
+                day: "numeric",
+              })}
+            </p>
+            {(completedModes[selectedDate]?.total ?? 0) > 0 && (
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5 text-[11px] text-white/45 text-center">
+                Sessions: Bronze {completedModes[selectedDate]?.quick ?? 0} · Silver {completedModes[selectedDate]?.standard ?? 0} · Gold {completedModes[selectedDate]?.deep ?? 0}
+                {(completedModes[selectedDate]?.checkpoints ?? 0) > 0 ? ` · Checkpoints ${completedModes[selectedDate]?.checkpoints ?? 0}` : ""}
+              </div>
+            )}
+            {selectedHasExercises ? (
+              <ModeSelector
+                exerciseCounts={exerciseCounts}
+                onSelect={(mode) => router.push(`/session/${selectedDate}?mode=${mode}`)}
+                suggested={suggestedMode}
+                date={selectedDate}
+              />
+            ) : selectedSessionStats && selectedSessionStats.total > 0 && selectedIsPast ? (
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-center space-y-2">
+                <p className="text-[11px] uppercase tracking-wider text-accent-light">Past Session Summary</p>
+                <p className="text-sm text-white/65">
+                  Bronze {selectedSessionStats.quick} · Silver {selectedSessionStats.standard} · Gold {selectedSessionStats.deep}
+                </p>
+                <Link
+                  href={`/session/${selectedDate}/history`}
+                  className="inline-block text-[11px] text-accent-light"
+                >
+                  View session details
+                </Link>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-center text-sm text-white/30">
+                No exercises for this day
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <p className="text-[11px] text-white/35 uppercase tracking-wider px-1">Learning Activity</p>

@@ -62,7 +62,7 @@ export default function SessionHistoryPage() {
     <DashboardShell>
       <div className="flex items-center gap-3">
         <Link
-          href="/calendar"
+          href="/progress"
           className="p-2 -ml-2 rounded-lg hover:bg-white/5 transition text-white/50 hover:text-white"
         >
           <ArrowLeft size={20} />

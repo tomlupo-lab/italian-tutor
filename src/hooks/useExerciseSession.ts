@@ -372,6 +372,7 @@ export function useExerciseSession({
   const [results, setResults] = useState<Map<string, ExerciseResult>>(
     new Map(),
   );
+  const resultsRef = useRef<Map<string, ExerciseResult>>(new Map());
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -502,6 +503,7 @@ export function useExerciseSession({
         next.set(currentExercise._id, result);
         return next;
       });
+      resultsRef.current.set(currentExercise._id, result);
       const feedbackScore = resultScore(result);
       triggerAnswerFeedback(
         currentExercise.type === "srs"
@@ -563,7 +565,7 @@ export function useExerciseSession({
           // Compute rating from results
           let correctCount = 0;
           let totalItems = 0;
-          const allResults = new Map(results);
+          const allResults = new Map(resultsRef.current);
           allResults.set(currentExercise._id, result);
 
           for (const r of allResults.values()) {

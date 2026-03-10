@@ -10,7 +10,6 @@ import { useRouter } from "next/navigation";
 import Badge from "@/components/Badge";
 import { DashboardShell } from "@/components/layout/ScreenShell";
 import type { ExerciseMode } from "@/lib/exerciseTypes";
-import { prettySkillLabel } from "@/lib/labels";
 import {
   inventoryToExerciseCounts,
   pickRunnableMode,
@@ -164,33 +163,6 @@ export default function Home() {
     }, {} as Record<ExerciseMode, { done: number; target: number; percent: number }>);
   }, [activeProgress]);
 
-  const recommendationText = useMemo(() => {
-    if (missionStatus === "blocked") {
-      const blockers = activeProgress?.active.skillBlockers ?? [];
-      if (blockers.length > 0) {
-        const labels = blockers
-          .slice(0, 2)
-          .map((blocker) => prettySkillLabel(blocker.skillKey) ?? blocker.skillKey);
-        return `Recovery recommended for ${labels.join(" and ")} before continuing the mission.`;
-      }
-      return "Recovery recommended before continuing the mission.";
-    }
-    if (!runnableRecommendedMode) {
-      return generating
-        ? "Marco is preparing the next mission set."
-        : "No mission activity is ready yet.";
-    }
-    if (runnableRecommendedMode === "quick") {
-      return dueCardsCount > 0
-        ? `${dueCardsCount} review card${dueCardsCount === 1 ? "" : "s"} due.`
-        : "Quick review is the best next step.";
-    }
-    if (runnableRecommendedMode === "standard") {
-      return `${exerciseCounts.cloze + exerciseCounts.word_builder + exerciseCounts.pattern_drill + exerciseCounts.speed_translation + exerciseCounts.error_hunt} drill items ready.`;
-    }
-    return `${exerciseCounts.conversation} conversation scenari${exerciseCounts.conversation === 1 ? "o" : "os"} ready.`;
-  }, [activeProgress?.active.skillBlockers, dueCardsCount, exerciseCounts, generating, missionStatus, runnableRecommendedMode]);
-
   const handleModeSelect = (mode: ExerciseMode) => {
     router.push(`/session/${today}?mode=${mode}`);
   };
@@ -335,18 +307,7 @@ export default function Home() {
                           <p className="text-[10px] text-white/40">{MODE_COPY[mode].subtitle}</p>
                         </div>
                       </div>
-                    <div className="flex items-center gap-2 text-right">
-                      <p className="text-[10px] text-white/35">
-                        <span className="uppercase tracking-wide mr-1">Sessions remaining</span>
-                        <Badge tone="level" className="px-2 py-0.5 text-[10px]">
-                          {Math.max(
-                            (modeProgress?.[mode].target ?? 0) -
-                              (modeProgress?.[mode].done ?? 0),
-                            0,
-                          )}
-                        </Badge>
-                      </p>
-                    </div>
+                    <div className="flex items-center gap-2 text-right" />
                     </div>
                     <div className="mt-1.5 space-y-1">
                       <div className="flex items-center justify-between text-[10px] text-white/35">
@@ -366,7 +327,8 @@ export default function Home() {
             </div>
 
             <p className="text-[11px] text-white/40">
-              {recommendationText}
+              Choose a session level to move the mission forward. Once a level reaches 100%, you can still replay it for
+              practice, but it will not add more mission progress.
             </p>
 
             {activeProgress.blocker ? (

@@ -18,6 +18,12 @@ interface ExerciseFlowProps {
   date: string;
 }
 
+const NEXT_MODE_COPY: Record<ExerciseMode, string> = {
+  quick: "Start next Bronze session",
+  standard: "Start next Silver session",
+  deep: "Start next Gold session",
+};
+
 export default function ExerciseFlow({
   exercises,
   mode,
@@ -205,8 +211,14 @@ export default function ExerciseFlow({
             )}
 
             <Link
-              href="/"
+              href={`/session/${date}?mode=${mode}`}
               className="px-6 py-3 bg-accent rounded-xl text-sm font-medium"
+            >
+              {NEXT_MODE_COPY[mode]}
+            </Link>
+            <Link
+              href="/"
+              className="px-6 py-3 bg-card rounded-xl border border-white/10 text-sm font-medium"
             >
               Back to Home
             </Link>

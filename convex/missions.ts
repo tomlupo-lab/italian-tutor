@@ -419,6 +419,7 @@ export const recordLessonCompletion = mutation({
     sessionId: v.optional(v.id("sessions")),
     learnerId: v.optional(v.string()),
     missionId: v.optional(v.string()),
+    mode: v.optional(v.union(v.literal("quick"), v.literal("standard"), v.literal("deep"))),
     sessionDate: v.string(),
     scorePercent: v.number(),
     bronzeCredit: v.number(),
@@ -520,10 +521,14 @@ export const recordLessonCompletion = mutation({
     const duplicateSameDay = sigIdx >= 0 && currentSignatures[sigIdx].count > 0;
     const antiFarmMultiplier = duplicateSameDay ? 0.35 : 1;
     const creditMultiplier = qualityMultiplier * antiFarmMultiplier;
+    const silverSessionCredit =
+      args.mode === "standard" && args.silverCredit > 0
+        ? Math.max(1, Math.round(args.scorePercent / 10))
+        : args.silverCredit;
     const appliedBronzeCredit =
       args.bronzeCredit > 0 ? Math.max(0, Math.round(args.bronzeCredit * creditMultiplier)) : 0;
     const appliedSilverCredit =
-      args.silverCredit > 0 ? Math.max(0, Math.round(args.silverCredit * creditMultiplier)) : 0;
+      silverSessionCredit > 0 ? Math.max(0, Math.round(silverSessionCredit * creditMultiplier)) : 0;
     const appliedGoldCredit =
       args.goldCredit > 0 ? Math.max(0, Math.round(args.goldCredit * creditMultiplier)) : 0;
     const nextCredits = {

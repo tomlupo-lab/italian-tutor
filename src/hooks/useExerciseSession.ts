@@ -595,6 +595,7 @@ export function useExerciseSession({
               const sessionSignature = buildSessionSignature(exercises, mode);
               const missionResult = await recordMissionCompletion({
                 sessionId: saveResult.id,
+                mode,
                 sessionDate,
                 scorePercent: Math.round(pct * 100),
                 bronzeCredit,

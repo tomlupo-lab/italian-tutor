@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as backfillMissingDirections from "../backfillMissingDirections.js";
 import type * as cards from "../cards.js";
 import type * as exerciseGenerator from "../exerciseGenerator.js";
 import type * as exercises from "../exercises.js";
@@ -24,6 +25,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  backfillMissingDirections: typeof backfillMissingDirections;
   cards: typeof cards;
   exerciseGenerator: typeof exerciseGenerator;
   exercises: typeof exercises;

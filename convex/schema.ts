@@ -172,6 +172,14 @@ export default defineSchema({
       v.literal("B1"),
       v.literal("B2")
     ),
+    displayLevel: v.optional(
+      v.union(
+        v.literal("A1"),
+        v.literal("A2"),
+        v.literal("B1"),
+        v.literal("B2")
+      )
+    ),
     order: v.number(),
     required: v.boolean(),
     summary: v.string(),

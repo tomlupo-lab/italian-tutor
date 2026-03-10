@@ -22,6 +22,7 @@ import type {
 } from "@/lib/missionTypes";
 
 const LEVELS: Level[] = ["A1", "A2", "B1", "B2"];
+const missionLevelLabel = (mission: CatalogMission) => mission.displayLevel ?? mission.level;
 
 function prettySkill(skillKey: string): string {
   return skillKey
@@ -355,7 +356,7 @@ export default function MissionsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-[11px] text-white/45">
-                          {mission.required ? "Required" : "Optional"}
+                          {mission.required ? "Required" : "Optional"} · {missionLevelLabel(mission)}
                         </p>
                         <h3 className="text-sm font-semibold leading-tight mt-0.5">{mission.title}</h3>
                         <p className="text-xs text-white/45 mt-1">{mission.summary}</p>

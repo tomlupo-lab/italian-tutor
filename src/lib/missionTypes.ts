@@ -22,6 +22,7 @@ export interface ActiveMissionResult {
   title: string;
   summary: string;
   level?: Level;
+  displayLevel?: Level;
   status?: MissionStatus;
 }
 
@@ -38,6 +39,7 @@ export interface LearnerMission {
 export interface CatalogMission {
   missionId: string;
   level: Level;
+  displayLevel?: Level;
   order: number;
   required: boolean;
   title: string;

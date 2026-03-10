@@ -266,8 +266,11 @@ export default function Home() {
           ) : missionStatus === "completed" ? (
             <Badge tone="status" status="completed">Completed</Badge>
           ) : activeProgress?.mission?.level ? (
-            <Badge tone="level" level={activeProgress.mission.level}>
-              {activeProgress.mission.level}
+            <Badge
+              tone="level"
+              level={activeProgress.mission.displayLevel ?? activeProgress.mission.level}
+            >
+              {activeProgress.mission.displayLevel ?? activeProgress.mission.level}
             </Badge>
           ) : (
             <Badge>None</Badge>

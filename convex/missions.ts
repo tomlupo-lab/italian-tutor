@@ -406,6 +406,7 @@ export const getActiveMission = query({
     return {
       missionId: active.missionId,
       level: active.level,
+      displayLevel: mission?.displayLevel,
       status: active.status,
       title: mission?.title ?? active.missionId,
       summary: mission?.summary ?? "",

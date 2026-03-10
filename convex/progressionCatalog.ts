@@ -12,6 +12,7 @@ export interface MissionTemplate {
   missionId: string;
   title: string;
   level: CefrLevel;
+  displayLevel?: CefrLevel;
   order: number;
   required: boolean;
   summary: string;
@@ -343,6 +344,7 @@ export const MISSIONS: MissionTemplate[] = [
     missionId: "a1-flat-hunt-48h",
     title: "The 48-Hour Flat Hunt",
     level: "A1",
+    displayLevel: "A2",
     order: 1,
     required: true,
     summary: "Secure a room in Rome before your temporary stay expires.",
@@ -368,6 +370,7 @@ export const MISSIONS: MissionTemplate[] = [
     missionId: "a1-dinner-inlaws",
     title: "Dinner With Future In-Laws",
     level: "A1",
+    displayLevel: "A2",
     order: 2,
     required: true,
     summary: "Navigate a full restaurant interaction under social pressure.",
@@ -393,6 +396,7 @@ export const MISSIONS: MissionTemplate[] = [
     missionId: "a1-last-train",
     title: "Last Train to Florence",
     level: "A1",
+    displayLevel: "A2",
     order: 3,
     required: true,
     summary: "Recover from a disrupted route and still arrive tonight.",
@@ -468,6 +472,7 @@ export const MISSIONS: MissionTemplate[] = [
     missionId: "a1-midnight-pharmacy",
     title: "Midnight Pharmacy Run",
     level: "A1",
+    displayLevel: "A2",
     order: 6,
     required: false,
     summary: "Handle a late-night health issue safely in Italian.",
@@ -493,6 +498,7 @@ export const MISSIONS: MissionTemplate[] = [
     missionId: "a1-social-circle",
     title: "Build Your Social Circle",
     level: "A1",
+    displayLevel: "A2",
     order: 7,
     required: false,
     summary: "Plan and coordinate your first weekend meetup in Italian.",
@@ -518,6 +524,7 @@ export const MISSIONS: MissionTemplate[] = [
     missionId: "a1-final-day-test",
     title: "A Day That Tests Everything",
     level: "A1",
+    displayLevel: "A2",
     order: 8,
     required: true,
     summary: "Survive a full day in Italian across core life scenarios.",

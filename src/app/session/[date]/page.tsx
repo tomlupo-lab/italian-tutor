@@ -44,14 +44,15 @@ export default function SessionPage() {
     modeParam,
   );
 
-  const allExercises = useQuery(api.exercises.getByDate, { date: dateParam });
   const dueCards = useQuery(api.cards.getDue, { limit: 200 });
   const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
+  const missionExercises = useQuery(
+    api.exercises.getByMission,
+    activeMission?.missionId ? { missionId: activeMission.missionId } : "skip",
+  ) as Exercise[] | undefined;
   const inventoryStatus = useQuery(
-    api.exercises.getInventoryStatus,
-    activeMission?.missionId
-      ? { date: dateParam, missionId: activeMission.missionId }
-      : { date: dateParam },
+    api.exercises.getMissionInventoryStatus,
+    activeMission?.missionId ? { missionId: activeMission.missionId } : "skip",
   ) as InventoryStatusResult | undefined;
   const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
     | { missions: LearnerMission[] }
@@ -68,15 +69,9 @@ export default function SessionPage() {
     [inventoryStatus, dueCardsCount],
   );
 
-  // Filter exercises by mode
   const candidateExercises = useMemo(() => {
-    if (!allExercises) return [];
-    const missionId = activeMission?.missionId;
-    if (!missionId) return allExercises as Exercise[];
-    return (allExercises as Exercise[]).filter(
-      (ex) => !ex.missionId || ex.missionId === missionId,
-    );
-  }, [allExercises, activeMission?.missionId]);
+    return missionExercises ?? [];
+  }, [missionExercises]);
 
   const enabledModes = useMemo(() => {
     const available = new Set<ExerciseMode>();
@@ -137,7 +132,7 @@ export default function SessionPage() {
   }, [learnerProgress?.missions, catalog?.missions]);
 
   // Loading
-  if (allExercises === undefined || inventoryStatus === undefined) {
+  if (activeMission?.missionId && (missionExercises === undefined || inventoryStatus === undefined)) {
     return (
       <main className="min-h-screen flex items-center justify-center">
         <Loader2 size={32} className="text-accent animate-spin" />
@@ -145,12 +140,12 @@ export default function SessionPage() {
     );
   }
 
-  if (enabledModes.length === 0) {
+  if (!activeMission?.missionId || enabledModes.length === 0) {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center gap-4 px-4">
-        <p className="text-white/50">No mission-ready exercises for {dateParam}</p>
+        <p className="text-white/50">No mission exercises are available right now</p>
         <p className="text-xs text-white/30">
-          Marco adds mission-ready practice as your progress, errors, and review queue evolve.
+          Marco will unlock mission practice as inventory is generated for your active mission.
         </p>
         <Link
           href="/"

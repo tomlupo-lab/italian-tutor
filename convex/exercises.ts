@@ -16,6 +16,60 @@ const STANDARD_TYPES = new Set([
 ]);
 const DEEP_TYPES = new Set(["conversation", "reflection"]);
 
+function summarizeInventory(exercises: Array<{ type: string; completed: boolean; source?: string }>) {
+  let quickReady = 0;
+  let standardReady = 0;
+  let deepReady = 0;
+  let recoveryReady = 0;
+  let quickTotal = 0;
+  let standardTotal = 0;
+  let deepTotal = 0;
+
+  for (const ex of exercises) {
+    if (ex.source === "recovery" && !ex.completed) recoveryReady++;
+    if (QUICK_TYPES.has(ex.type)) {
+      quickTotal++;
+      if (!ex.completed) quickReady++;
+      continue;
+    }
+    if (STANDARD_TYPES.has(ex.type)) {
+      standardTotal++;
+      if (!ex.completed) standardReady++;
+      continue;
+    }
+    if (DEEP_TYPES.has(ex.type)) {
+      deepTotal++;
+      if (!ex.completed) deepReady++;
+    }
+  }
+
+  const totalReady = quickReady + standardReady + deepReady;
+  const totalExisting = quickTotal + standardTotal + deepTotal;
+  const status =
+    totalReady > 0
+      ? "ready"
+      : recoveryReady > 0
+        ? "recovery_only"
+        : totalExisting > 0
+          ? "replay_only"
+          : "empty";
+
+  return {
+    status,
+    counts: {
+      quickReady,
+      standardReady,
+      deepReady,
+      recoveryReady,
+      totalReady,
+      quickTotal,
+      standardTotal,
+      deepTotal,
+      totalExisting,
+    },
+  };
+}
+
 // Get all exercises for a date (app filters by mode→type mapping client-side)
 export const getByDate = query({
   args: { date: v.optional(v.string()) },
@@ -72,38 +126,47 @@ export const getInventoryStatus = query({
       exercises = exercises.filter((ex) => ex.missionId === args.missionId);
     }
 
-    let quickReady = 0;
-    let standardReady = 0;
-    let deepReady = 0;
-    let recoveryReady = 0;
-
-    for (const ex of exercises) {
-      if (ex.completed) continue;
-      if (ex.source === "recovery") recoveryReady++;
-      if (QUICK_TYPES.has(ex.type)) quickReady++;
-      else if (STANDARD_TYPES.has(ex.type)) standardReady++;
-      else if (DEEP_TYPES.has(ex.type)) deepReady++;
-    }
-
-    const totalReady = quickReady + standardReady + deepReady;
-    const status =
-      totalReady > 0
-        ? "ready"
-        : recoveryReady > 0
-          ? "recovery_only"
-          : "empty";
+    const summary = summarizeInventory(exercises);
 
     return {
       date,
       missionId: args.missionId ?? null,
-      status,
-      counts: {
-        quickReady,
-        standardReady,
-        deepReady,
-        recoveryReady,
-        totalReady,
-      },
+      status: summary.status,
+      counts: summary.counts,
+    };
+  },
+});
+
+export const getByMission = query({
+  args: { missionId: v.string() },
+  handler: async (ctx, args) => {
+    const exercises = await ctx.db
+      .query("exercises")
+      .withIndex("by_mission_tier", (q) => q.eq("missionId", args.missionId))
+      .collect();
+
+    return exercises.sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return a.order - b.order;
+    });
+  },
+});
+
+export const getMissionInventoryStatus = query({
+  args: { missionId: v.string() },
+  handler: async (ctx, args) => {
+    const exercises = await ctx.db
+      .query("exercises")
+      .withIndex("by_mission_tier", (q) => q.eq("missionId", args.missionId))
+      .collect();
+
+    const summary = summarizeInventory(exercises);
+
+    return {
+      missionId: args.missionId,
+      status: summary.status,
+      counts: summary.counts,
     };
   },
 });

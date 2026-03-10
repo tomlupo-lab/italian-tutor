@@ -53,10 +53,8 @@ export default function Home() {
   const milestones = useQuery(api.milestones.getAll);
   const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
   const inventoryStatus = useQuery(
-    api.exercises.getInventoryStatus,
-    activeMission?.missionId
-      ? { date: today, missionId: activeMission.missionId }
-      : { date: today },
+    api.exercises.getMissionInventoryStatus,
+    activeMission?.missionId ? { missionId: activeMission.missionId } : "skip",
   ) as InventoryStatusResult | undefined;
   const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
     | { missions: LearnerMission[] }
@@ -65,7 +63,7 @@ export default function Home() {
     | { missions: CatalogMission[] }
     | undefined;
 
-  // Auto-generate exercises when inventory is empty and mission is active
+  // Auto-generate the first mission inventory when a mission has no exercises at all.
   const [generating, setGenerating] = useState(false);
   const generatedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -74,10 +72,10 @@ export default function Home() {
       activeMission?.missionId &&
       activeMission.status === "active" &&
       !generating &&
-      generatedRef.current !== `${today}-${activeMission.missionId}`
+      generatedRef.current !== activeMission.missionId
     ) {
       setGenerating(true);
-      generatedRef.current = `${today}-${activeMission.missionId}`;
+      generatedRef.current = activeMission.missionId;
       generateExercises({ date: today, missionId: activeMission.missionId })
         .then((r) => console.log("Auto-generated exercises:", r))
         .catch((e) => console.error("Exercise generation failed:", e))
@@ -190,7 +188,7 @@ export default function Home() {
   };
 
   // Loading state
-  if (stats === undefined || inventoryStatus === undefined) {
+  if (stats === undefined || (activeMission?.missionId && inventoryStatus === undefined)) {
     return (
       <main className="min-h-screen flex items-center justify-center">
         <Loader2 size={32} className="text-accent animate-spin" />
@@ -310,10 +308,16 @@ export default function Home() {
               {(["quick", "standard", "deep"] as ExerciseMode[]).map((mode) => {
                 const count = (["quick", "standard", "deep"].includes(mode)
                   ? mode === "quick"
-                    ? exerciseCounts.srs
+                    ? inventoryStatus?.counts.quickTotal ?? exerciseCounts.srs
                     : mode === "standard"
-                      ? exerciseCounts.cloze + exerciseCounts.word_builder + exerciseCounts.pattern_drill + exerciseCounts.speed_translation + exerciseCounts.error_hunt
-                      : exerciseCounts.conversation + exerciseCounts.reflection
+                      ? inventoryStatus?.counts.standardTotal ?? (
+                          exerciseCounts.cloze +
+                          exerciseCounts.word_builder +
+                          exerciseCounts.pattern_drill +
+                          exerciseCounts.speed_translation +
+                          exerciseCounts.error_hunt
+                        )
+                      : inventoryStatus?.counts.deepTotal ?? (exerciseCounts.conversation + exerciseCounts.reflection)
                   : 0);
                 const unavailable = !activeProgress.mission;
                 const recommended = runnableRecommendedMode === mode && !unavailable && !activeProgress.blocker;

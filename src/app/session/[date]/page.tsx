@@ -138,24 +138,34 @@ export default function SessionPage() {
       })
       .sort((a, b) => a.order - b.order);
 
-    if (selectedMode === "quick" && dueCards && dueCards.length > 0) {
-      const cardExercises = (dueCards as DueCard[]).map((card, i) => ({
-        _id: `card-${card._id as string}`,
-        date: dateParam,
-        type: "srs" as Exercise["type"],
-        order: 900 + i,
-        content: {
-          front: card.it,
-          back: card.en,
-          tag: card.tag,
-          level: card.level,
-          example: card.example,
-        },
-        difficulty: card.level ?? "A1",
-        completed: false,
-        source: "seed" as Exercise["source"],
-      } satisfies Exercise));
-      return [...missionExercises, ...cardExercises];
+    if (selectedMode === "quick") {
+      const QUICK_SESSION_LIMIT = 15;
+      const quickExercises: Exercise[] = [];
+      quickExercises.push(...missionExercises.slice(0, QUICK_SESSION_LIMIT));
+      let used = quickExercises.length;
+      if (used < QUICK_SESSION_LIMIT && dueCards && dueCards.length > 0) {
+        const cardsToTake = Math.min(QUICK_SESSION_LIMIT - used, dueCards.length);
+        for (let i = 0; i < cardsToTake; i++) {
+          const card = (dueCards as DueCard[])[i];
+          quickExercises.push({
+            _id: `card-${card._id as string}`,
+            date: dateParam,
+            type: "srs" as Exercise["type"],
+            order: 900 + i,
+            content: {
+              front: card.it,
+              back: card.en,
+              tag: card.tag,
+              level: card.level,
+              example: card.example,
+            },
+            difficulty: card.level ?? "A1",
+            completed: false,
+            source: "seed" as Exercise["source"],
+          });
+        }
+      }
+      return quickExercises;
     }
 
     return missionExercises;

@@ -101,7 +101,7 @@ export default function SrsCard({
 
   useEffect(() => {
     stopItalianTts();
-    if (mode !== "reverse") {
+    if (mode === "classic" || mode === "listening") {
       speakItalian(vocabCard.it, speechRate);
       return () => {
         stopItalianTts();
@@ -110,9 +110,12 @@ export default function SrsCard({
         }
       };
     }
-    if (flipped) {
-      speakItalian(vocabCard.it, speechRate);
+    if (mode === "cloze") {
+      const timeoutId = window.setTimeout(() => {
+        speakItalian(vocabCard.it, speechRate);
+      }, reverseAutoplayDelayMs);
       return () => {
+        window.clearTimeout(timeoutId);
         stopItalianTts();
         if (submitTimerRef.current !== null) {
           window.clearTimeout(submitTimerRef.current);
@@ -125,14 +128,28 @@ export default function SrsCard({
         window.clearTimeout(submitTimerRef.current);
       }
     };
-  }, [flipped, mode, speechRate, vocabCard.it]);
+  }, [mode, reverseAutoplayDelayMs, speechRate, vocabCard.it]);
+
+  const handleFlip = useCallback(() => {
+    setFlipped((value) => {
+      const next = !value;
+      if (!next) return next;
+      stopItalianTts();
+      if (mode === "classic" || mode === "listening") {
+        speakItalian(vocabCard.ex, speechRate);
+      } else if (mode === "reverse") {
+        speakItalian(vocabCard.it, speechRate);
+      }
+      return next;
+    });
+  }, [mode, speechRate, vocabCard.ex, vocabCard.it]);
 
   return (
     <div className="space-y-4 w-full">
       <Flashcard
         card={vocabCard}
         flipped={flipped}
-        onFlip={() => setFlipped((value) => !value)}
+        onFlip={handleFlip}
         mode={mode}
         speechRate={speechRate}
       />

@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   BarChart3,
   Brain,
-  BookOpen,
   ChevronLeft,
   ChevronRight,
   Flag,
@@ -71,20 +70,6 @@ function weightedMissionProgress(mission: LearnerMission | undefined, catalogMis
   return clampPct(((bronzePct + silverPct + goldPct) / 3) * 100);
 }
 
-const SKILL_LEVELS = ["A1", "A2", "B1", "B2"] as const;
-const ERROR_CAT_LABELS: Record<string, string> = {
-  cloze: "Fill-in-the-blank",
-  word_order: "Word order",
-  grammar_pattern: "Grammar patterns",
-  translation: "Translation",
-  error_recognition: "Error spotting",
-  grammar: "Grammar",
-  vocab: "Vocabulary",
-  functional: "Functional",
-  unknown: "General",
-  other: "General",
-};
-
 export default function ProgressPage() {
   const router = useRouter();
   const analytics = useProgressAnalytics();
@@ -103,7 +88,6 @@ export default function ProgressPage() {
     | undefined;
   const recentSessions = useQuery(api.sessions.listRecent, { limit: 200 });
   const dueCards = useQuery(api.cards.getDue, { limit: 999 });
-  const allCards = useQuery(api.cards.getAll) as Record<string, unknown>[] | undefined;
 
   const from = formatDate(year, month, 1);
   const to = formatDate(year, month, new Date(year, month + 1, 0).getDate());
@@ -260,19 +244,6 @@ export default function ProgressPage() {
     return weeks;
   }, [recentSessions]);
 
-  const corrections = useMemo(() => {
-    if (!allCards) return null;
-    const correctionCards = allCards.filter((card) => card.source === "correction");
-    if (correctionCards.length === 0) return null;
-    const byCategory: Record<string, number> = {};
-    for (const card of correctionCards) {
-      const category =
-        typeof card.errorCategory === "string" ? card.errorCategory : "other";
-      byCategory[category] = (byCategory[category] ?? 0) + 1;
-    }
-    return Object.entries(byCategory).sort(([, a], [, b]) => b - a).slice(0, 4);
-  }, [allCards]);
-
   const monthName = new Date(year, month).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   if (analytics.loading) {
@@ -355,35 +326,6 @@ export default function ProgressPage() {
           Choose a session level to move the mission forward. Once a level reaches 100%, you can still replay it for practice, but it will not add more mission progress.
         </p>
       </section>
-
-      {SKILL_LEVELS.some((level) => analytics.levels[level]) && (
-        <section className="rounded-2xl border border-white/10 bg-card p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <BarChart3 size={14} className="text-accent-light" />
-            <h2 className="text-sm font-medium text-white/70">Skills progression</h2>
-          </div>
-          <div className="space-y-3">
-            {SKILL_LEVELS.map((level) => {
-              const data = analytics.levels[level];
-              if (!data) return null;
-              return (
-                <div key={level} className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px] text-white/45">
-                    <span>{level}</span>
-                    <span>{data.mastered}/{data.total} mastered</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-white/5">
-                    <div
-                      className="h-2 rounded-full bg-accent transition-all"
-                      style={{ width: `${data.masteredPct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       <section className="rounded-2xl border border-white/10 bg-card p-4 space-y-3">
         <div className="flex items-center justify-between">
@@ -578,25 +520,6 @@ export default function ProgressPage() {
           <p className="text-xs text-white/40">
             Retention {analytics.srs.retentionRate}% · {analytics.srs.total} cards total
           </p>
-        </section>
-      )}
-
-      {corrections && (
-        <section className="rounded-2xl border border-white/10 bg-card p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <BookOpen size={14} className="text-warn" />
-            <h2 className="text-sm font-medium text-white/70">Error review</h2>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {corrections.map(([category, count]) => (
-              <span key={category} className="rounded-full bg-warn/10 px-2 py-0.5 text-[10px] text-warn/80">
-                {ERROR_CAT_LABELS[category] ?? category} ({count})
-              </span>
-            ))}
-          </div>
-          <Link href="/exercises?focus=recovery" className="inline-block text-[11px] text-warn">
-            Review recent mistakes
-          </Link>
         </section>
       )}
     </DashboardShell>

@@ -490,6 +490,60 @@ export const repairRecoveryCards = mutation({
   },
 });
 
+export const repairResidualExerciseContent = mutation({
+  args: {},
+  handler: async (ctx) => {
+    let libraryUpdated = 0;
+    let exercisesUpdated = 0;
+
+    const libraryRows = await ctx.db.query("missionExerciseLibrary").collect();
+    for (const row of libraryRows) {
+      const content = row.content;
+      if (!content || !Array.isArray(content.sentences)) continue;
+      let changed = false;
+      const sentences = content.sentences.map((sentence: any) => {
+        if (sentence?.text === "Vado in stazione alle sei.") {
+          changed = true;
+          return {
+            ...sentence,
+            text: "Vado a appuntamento alle sei.",
+            corrected: "Vado all'appuntamento alle sei.",
+            explanation: "Before a vowel, a + l' contracts to all'.",
+          };
+        }
+        return sentence;
+      });
+      if (!changed) continue;
+      await ctx.db.patch(row._id, { content: { ...content, sentences } });
+      libraryUpdated += 1;
+    }
+
+    const exerciseRows = await ctx.db.query("exercises").collect();
+    for (const row of exerciseRows) {
+      const content = row.content;
+      if (!content || !Array.isArray(content.sentences)) continue;
+      let changed = false;
+      const sentences = content.sentences.map((sentence: any) => {
+        if (sentence?.text === "Vado in stazione alle sei.") {
+          changed = true;
+          return {
+            ...sentence,
+            text: "Vado a appuntamento alle sei.",
+            corrected: "Vado all'appuntamento alle sei.",
+            explanation: "Before a vowel, a + l' contracts to all'.",
+          };
+        }
+        return sentence;
+      });
+      if (!changed) continue;
+      await ctx.db.patch(row._id, { content: { ...content, sentences } });
+      exercisesUpdated += 1;
+    }
+
+    return { libraryUpdated, exercisesUpdated };
+  },
+});
+
 export const backfillLevels = mutation({
   args: {},
   handler: async (ctx) => {

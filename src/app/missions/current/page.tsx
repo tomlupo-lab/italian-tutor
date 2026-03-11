@@ -25,9 +25,9 @@ import type {
 } from "@/lib/missionTypes";
 
 const TIER_ACTIVITY_LABEL: Record<ExerciseMode, string> = {
-  bronze: "Words",
-  silver: "Drills",
-  gold: "Conversation",
+  bronze: "Review words",
+  silver: "Do drills",
+  gold: "Have conversation",
 };
 
 const MODE_TARGET_KEY: Record<ExerciseMode, "bronzeReviews" | "silverDrills" | "goldConversations"> = {
@@ -179,8 +179,14 @@ export default function CurrentMissionPage() {
         </div>
 
         {blockedByErrors ? (
-          <div className="rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-white/70">
-            You have {progress.criticalErrorsCount} critical errors to recover before continuing the mission.
+          <div className="rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-white/70 space-y-3">
+            <p>You have {progress.criticalErrorsCount} critical errors to recover before continuing the mission.</p>
+            <Link
+              href={withBasePath("/drills?focus=recovery")}
+              className="inline-flex rounded-xl border border-warn/30 bg-white/5 px-4 py-2 text-sm font-medium text-white"
+            >
+              Practice mistakes
+            </Link>
           </div>
         ) : null}
 
@@ -207,9 +213,9 @@ export default function CurrentMissionPage() {
 
       <section className="space-y-3">
         <div className="px-1">
-          <h2 className="text-sm font-semibold">Choose tier</h2>
+          <h2 className="text-sm font-semibold">How do you want to move this mission forward?</h2>
           <p className="mt-1 text-xs text-white/45">
-            Pick Bronze, Silver, or Gold for this mission.
+            Choose the kind of practice that fits this mission step.
           </p>
         </div>
 
@@ -230,7 +236,7 @@ export default function CurrentMissionPage() {
                   ? "In progress"
                   : "Not started";
             const showReplayBadge = modeProgress[mode].percent >= 100;
-            const showRecommendedBadge = mode === recommendedTier && modeProgress[mode].percent < 100;
+            const isRecommended = mode === recommendedTier && modeProgress[mode].percent < 100;
 
             return (
               <Link
@@ -253,19 +259,17 @@ export default function CurrentMissionPage() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm">{EXERCISE_TIER_META[mode].emoji}</span>
-                      <p className="text-sm font-semibold">{EXERCISE_TIER_META[mode].label}</p>
+                      <p className="text-sm font-semibold">{TIER_ACTIVITY_LABEL[mode]}</p>
                       <p className="text-[11px] text-white/45">{stateLabel}</p>
                     </div>
+                    {isRecommended ? (
+                      <p className="text-[11px] text-accent-light">Best next step</p>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-2">
                     {showReplayBadge ? (
                       <Badge tone="accent" className="text-[10px] py-1">
-                        Replay
-                      </Badge>
-                    ) : null}
-                    {showRecommendedBadge ? (
-                      <Badge tone="accent" className="text-[10px] py-1">
-                      Recommended
+                        Practice again
                       </Badge>
                     ) : null}
                   </div>

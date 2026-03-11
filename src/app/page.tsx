@@ -225,7 +225,7 @@ export default function Home() {
               <p className="text-sm font-semibold">Build skills</p>
             </div>
             <p className="mt-1 text-[11px] text-white/45">
-              Train with drills
+              Target grammar, listening, speaking, and more
             </p>
           </Link>
         </div>
@@ -243,7 +243,7 @@ export default function Home() {
               <p className="text-[11px] text-white/45">
                 {activeProgress?.mission
                   ? `${activeProgress.mission.displayLevel ?? activeProgress.mission.level} • ${missionProgress?.percent ?? 0}% complete`
-                  : "Open Missions to start your campaign"}
+                  : "Choose a mission to start"}
               </p>
             </div>
             {missionStatus === "blocked" ? (
@@ -289,6 +289,10 @@ export default function Home() {
               </div>
             </div>
           ) : null}
+          <div className="mt-4 flex items-center justify-between text-sm">
+            <span className="text-white/55">Continue mission</span>
+            <span className="text-accent-light">Open</span>
+          </div>
         </Link>
       </div>
     </DashboardShell>

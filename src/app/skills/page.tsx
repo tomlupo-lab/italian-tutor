@@ -37,15 +37,16 @@ export default function SkillsPage() {
     <DashboardShell contentClassName="gap-6">
       <section className="rounded-2xl border border-white/10 bg-card p-5 space-y-2">
         <p className="text-[11px] uppercase tracking-wider text-accent-light">Build skills</p>
-        <h1 className="text-lg font-semibold">Deliberate practice by level and focus</h1>
+        <h1 className="text-lg font-semibold">Choose what to train next</h1>
         <p className="text-sm text-white/45">
-          Choose a level and one focus area, then start a targeted drill batch.
+          Start a short drill batch matched to one skill area.
         </p>
       </section>
 
       <section className="space-y-3">
         <div className="px-1">
-          <h2 className="text-sm font-semibold">Choose level</h2>
+          <h2 className="text-sm font-semibold">Level</h2>
+          <p className="mt-1 text-xs text-white/40">Defaulting to your current level. Change it if needed.</p>
         </div>
         <div className="grid grid-cols-4 gap-2">
           {LEVELS.map((level) => (
@@ -68,7 +69,7 @@ export default function SkillsPage() {
 
       <section className="space-y-3">
         <div className="px-1">
-          <h2 className="text-sm font-semibold">Choose focus</h2>
+          <h2 className="text-sm font-semibold">Skill focus</h2>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           {SKILL_OPTIONS.map((option) => {
@@ -91,7 +92,19 @@ export default function SkillsPage() {
                   <Icon size={18} className={selected ? "text-accent-light" : "text-white/50"} />
                   <div className="space-y-2">
                     <p className="text-sm font-semibold">{meta.label}</p>
-                    <p className="text-xs text-white/45">{meta.description}</p>
+                    <p className="text-xs text-white/45">
+                      {option.key === "grammar"
+                        ? "Use sentence patterns more accurately"
+                        : option.key === "listening"
+                          ? "Catch key words and meaning faster"
+                          : option.key === "speaking"
+                            ? "Respond more accurately and fluently"
+                            : option.key === "conversation"
+                              ? "Handle real exchanges with more confidence"
+                              : option.key === "reading"
+                                ? "Understand short texts more easily"
+                                : "Grow useful words and recall them faster"}
+                    </p>
                     <p className="text-[11px] text-white/35">{meta.coverageNote}</p>
                   </div>
                 </div>
@@ -108,6 +121,7 @@ export default function SkillsPage() {
             {selectedLevel} • {selectedSkillMeta.label}
           </p>
           <p className="text-[11px] text-white/35 pt-1">{selectedSkillMeta.coverageNote}</p>
+          <p className="text-[11px] text-white/35">5 drills • {selectedLevel} • targeted practice set</p>
         </div>
         <Link
           href={withBasePath(`/drills?focus=skill&level=${selectedLevel}&skill=${selectedSkill}`)}

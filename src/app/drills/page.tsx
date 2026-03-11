@@ -370,8 +370,10 @@ export default function DrillsPage() {
     return (
       <main className="min-h-screen max-w-lg mx-auto px-4 py-6 space-y-6">
         <header className="space-y-1 text-center">
-          <h1 className="text-lg font-semibold">Drills</h1>
-          <p className="text-xs text-white/30">Free practice by drill type</p>
+          <h1 className="text-lg font-semibold">{recoveryFocus ? "Practice mistakes" : "Drills"}</h1>
+          <p className="text-xs text-white/30">
+            {recoveryFocus ? "Targeted recovery from recent weak spots" : "Free practice by drill type"}
+          </p>
         </header>
 
         {skillFocus && (
@@ -427,62 +429,70 @@ export default function DrillsPage() {
             </div>
           </button>
 
-          <button
-            onClick={() => startPractice("random")}
-            disabled={availableCount === 0}
-            className={cn(
-              "w-full text-left rounded-2xl border p-4 transition active:scale-[0.98]",
-              "bg-gradient-to-br from-accent/15 to-accent/5 border-accent/20",
-              availableCount === 0 && "opacity-40 cursor-not-allowed",
-            )}
-          >
-            <div className="flex items-center gap-3">
-              <Shuffle size={24} className="text-accent-light flex-shrink-0" />
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold">Mixed drills</span>
-                  {availableCount > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/20 text-accent-light">
-                      {availableCount} ready
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-white/40 mt-0.5">A varied drill set across formats</p>
-              </div>
-            </div>
-          </button>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xs font-medium text-white/30 uppercase tracking-wider px-1">
-            Choose Drill Type
-          </h2>
-          <div className="grid grid-cols-2 gap-3">
-            <Link
-              href={withBasePath(`/session/${today}?mode=bronze`)}
-              className="text-left rounded-2xl border border-white/10 bg-card p-4 transition active:scale-[0.98] hover:border-white/20"
-            >
-              <span className="text-lg">🗂️</span>
-              <p className="text-sm font-medium mt-2">Words review</p>
-              <p className="text-[11px] leading-4 text-white/40 mt-1.5">
-                Review SRS cards and due words
-              </p>
-            </Link>
-            {DRILL_TYPES.map((drill) => (
+          {!recoveryFocus ? (
+            <>
               <button
-                key={drill.type}
-                onClick={() => {
-                  setSelectedType(drill.type);
-                  startPractice("typed", drill.type);
-                }}
-                className="text-left rounded-2xl border border-white/10 bg-card p-4 transition active:scale-[0.98] hover:border-white/20"
+                onClick={() => startPractice("random")}
+                disabled={availableCount === 0}
+                className={cn(
+                  "w-full text-left rounded-2xl border p-4 transition active:scale-[0.98]",
+                  "bg-gradient-to-br from-accent/15 to-accent/5 border-accent/20",
+                  availableCount === 0 && "opacity-40 cursor-not-allowed",
+                )}
               >
-                <span className="text-lg">{drill.emoji}</span>
-                <p className="text-sm font-medium mt-2">{drill.label}</p>
-                <p className="text-[11px] leading-4 text-white/40 mt-1.5">{drill.description}</p>
+                <div className="flex items-center gap-3">
+                  <Shuffle size={24} className="text-accent-light flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">Mixed drills</span>
+                      {availableCount > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/20 text-accent-light">
+                          {availableCount} ready
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-white/40 mt-0.5">A varied drill set across formats</p>
+                  </div>
+                </div>
               </button>
-            ))}
-          </div>
+
+              <section className="space-y-3">
+                <h2 className="text-xs font-medium text-white/30 uppercase tracking-wider px-1">
+                  Choose Drill Type
+                </h2>
+                <div className="grid grid-cols-2 gap-3">
+                  <Link
+                    href={withBasePath(`/session/${today}?mode=bronze`)}
+                    className="text-left rounded-2xl border border-white/10 bg-card p-4 transition active:scale-[0.98] hover:border-white/20"
+                  >
+                    <span className="text-lg">🗂️</span>
+                    <p className="text-sm font-medium mt-2">Words review</p>
+                    <p className="text-[11px] leading-4 text-white/40 mt-1.5">
+                      Review SRS cards and due words
+                    </p>
+                  </Link>
+                  {DRILL_TYPES.map((drill) => (
+                    <button
+                      key={drill.type}
+                      onClick={() => {
+                        setSelectedType(drill.type);
+                        startPractice("typed", drill.type);
+                      }}
+                      className="text-left rounded-2xl border border-white/10 bg-card p-4 transition active:scale-[0.98] hover:border-white/20"
+                    >
+                      <span className="text-lg">{drill.emoji}</span>
+                      <p className="text-sm font-medium mt-2">{drill.label}</p>
+                      <p className="text-[11px] leading-4 text-white/40 mt-1.5">{drill.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </>
+          ) : (
+            <div className="rounded-2xl border border-white/10 bg-card px-4 py-4 text-sm text-white/55">
+              Open drills stay available from <span className="text-white">Build skills</span> or the regular drills page.
+            </div>
+          )}
         </section>
 
         {error && <p className="text-xs text-danger text-center">{error}</p>}
@@ -540,15 +550,22 @@ export default function DrillsPage() {
             }}
             className="w-full px-5 py-3 bg-accent rounded-xl text-sm font-medium hover:bg-accent/80 transition flex items-center justify-center gap-2"
           >
-            <RefreshCw size={16} />
-            {sessionSummary.primary}
-          </button>
+              <RefreshCw size={16} />
+              {mode === "errors" ? "More recovery practice" : sessionSummary.primary}
+            </button>
           {mode === "skill" ? (
             <Link
               href={withBasePath("/skills")}
               className="w-full px-5 py-3 bg-card rounded-xl border border-white/10 text-sm text-center"
             >
               Choose another skill
+            </Link>
+          ) : mode === "errors" ? (
+            <Link
+              href={withBasePath("/practice")}
+              className="w-full px-5 py-3 bg-card rounded-xl border border-white/10 text-sm text-center"
+            >
+              Review words
             </Link>
           ) : (
             <Link
@@ -590,7 +607,7 @@ export default function DrillsPage() {
           {currentExercise.type.replace("_", " ")}
         </span>
         <span className="text-xs text-white/20">
-          {mode === "errors" ? "Practice mistakes" : mode === "skill" ? "Build skills" : "Drills"}
+          {mode === "errors" ? "Recovery set" : mode === "skill" ? "Build skills" : "Drills"}
         </span>
       </div>
 

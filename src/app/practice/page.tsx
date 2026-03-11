@@ -16,8 +16,8 @@ import Link from "next/link";
 import { withBasePath } from "@/lib/paths";
 
 const MODES: { key: CardMode; label: string; icon: string }[] = [
-  { key: "classic", label: "Classic", icon: "🇮🇹→🇬🇧" },
-  { key: "reverse", label: "Reverse", icon: "🇬🇧→🇮🇹" },
+  { key: "classic", label: "Word to meaning", icon: "🇮🇹→🇬🇧" },
+  { key: "reverse", label: "Meaning to word", icon: "🇬🇧→🇮🇹" },
   { key: "listening", label: "Listening", icon: "🎧" },
   { key: "cloze", label: "Cloze", icon: "📝" },
 ];
@@ -58,6 +58,7 @@ export default function PracticePage() {
   const [totalQuality, setTotalQuality] = useState(0);
   const [done, setDone] = useState(false);
   const [mode, setMode] = useState<CardMode>("classic");
+  const [showReviewOptions, setShowReviewOptions] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -204,7 +205,7 @@ export default function PracticePage() {
           >
             {studyAll && <span className="block w-1.5 h-1.5 rounded-full bg-white" />}
           </span>
-          Study All
+          Include new cards
         </button>
       </div>
 
@@ -353,6 +354,28 @@ export default function PracticePage() {
             <p className="text-xs text-white/40">Avg quality / 5</p>
           </div>
         </div>
+        {!embeddedMode && (
+          <div className="w-full flex flex-col gap-3">
+            <Link
+              href={withBasePath("/practice")}
+              className="w-full px-5 py-3 bg-accent rounded-xl text-sm font-medium text-center"
+            >
+              Keep reviewing
+            </Link>
+            <Link
+              href={withBasePath("/drills?focus=recovery")}
+              className="w-full px-5 py-3 bg-card rounded-xl border border-white/10 text-sm text-center"
+            >
+              Practice mistakes
+            </Link>
+            <Link
+              href={withBasePath("/missions/current")}
+              className="w-full px-5 py-3 bg-card rounded-xl border border-white/10 text-sm text-center"
+            >
+              Continue mission
+            </Link>
+          </div>
+        )}
         {embeddedMode && sessionDate && (
           <Link
             href={withBasePath(`/session/${sessionDate}`)}
@@ -386,31 +409,55 @@ export default function PracticePage() {
 
   return (
     <StudyShell header={header} contentClassName="gap-4">
-      {!embeddedMode && filterBar}
+      {!embeddedMode && (
+        <div className="w-full space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <StudyProgressHeader
+              title="SRS Practice"
+              current={idx + 1}
+              total={cards.length}
+              label={studyAll ? "cards" : "due"}
+            />
+            <button
+              type="button"
+              onClick={() => setShowReviewOptions((value) => !value)}
+              className="shrink-0 rounded-xl border border-white/10 bg-card px-3 py-2 text-xs text-white/65 transition hover:bg-white/[0.03]"
+            >
+              {showReviewOptions ? "Hide options" : "Adjust review"}
+            </button>
+          </div>
+          {showReviewOptions ? (
+            <div className="space-y-4 rounded-2xl border border-white/10 bg-card/60 p-4">
+              {filterBar}
+              <div className="flex gap-2 flex-wrap justify-center">
+                {MODES.map((m) => (
+                  <button
+                    key={m.key}
+                    onClick={() => {
+                      setMode(m.key);
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-xs font-medium transition",
+                      mode === m.key ? "bg-accent text-white" : "bg-white/5 text-white/40 hover:bg-white/10",
+                    )}
+                  >
+                    {m.icon} {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
 
-      <div className="flex gap-2 flex-wrap justify-center">
-        {MODES.map((m) => (
-          <button
-            key={m.key}
-            onClick={() => {
-              setMode(m.key);
-            }}
-            className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-medium transition",
-              mode === m.key ? "bg-accent text-white" : "bg-white/5 text-white/40 hover:bg-white/10",
-            )}
-          >
-            {m.icon} {m.label}
-          </button>
-        ))}
-      </div>
-
-      <StudyProgressHeader
-        title="SRS Practice"
-        current={idx + 1}
-        total={cards.length}
-        label={studyAll ? "cards" : "due"}
-      />
+      {embeddedMode ? (
+        <StudyProgressHeader
+          title="SRS Practice"
+          current={idx + 1}
+          total={cards.length}
+          label={studyAll ? "cards" : "due"}
+        />
+      ) : null}
 
       <div className="flex gap-2 items-center">
         {currentCard.level && (

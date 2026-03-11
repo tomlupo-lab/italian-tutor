@@ -10,7 +10,7 @@ const items = [
   { href: withBasePath("/"), matchHref: "/", label: "Home", icon: Home },
   { href: withBasePath("/skills"), matchHref: "/skills", label: "Skills", icon: Brain },
   { href: withBasePath("/missions"), matchHref: "/missions", label: "Missions", icon: Flag },
-  { href: withBasePath("/drills"), matchHref: "/drills", label: "Drills", icon: Dumbbell },
+  { href: withBasePath("/practice"), matchHref: "/practice", label: "Review", icon: Dumbbell },
   { href: withBasePath("/progress"), matchHref: "/progress", label: "Progress", icon: BarChart3 },
 ];
 

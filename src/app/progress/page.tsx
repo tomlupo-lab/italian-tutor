@@ -139,21 +139,6 @@ export default function ProgressPage() {
     };
   }, [recentSessions]);
 
-  const practiceMix = useMemo(() => {
-    const breakdown = analytics.modeBreakdown ?? {};
-    const bronze = breakdown.bronze?.sessions ?? 0;
-    const silver = breakdown.silver?.sessions ?? 0;
-    const gold = breakdown.gold?.sessions ?? 0;
-    const total = bronze + silver + gold;
-    const pct = (value: number) => (total > 0 ? Math.round((value / total) * 100) : 0);
-
-    return {
-      words: { count: bronze, pct: pct(bronze) },
-      drills: { count: silver, pct: pct(silver) },
-      conversation: { count: gold, pct: pct(gold) },
-    };
-  }, [analytics.modeBreakdown]);
-
   const groupedSkills = useMemo(() => {
     const skills = learnerProgress?.skills ?? [];
     return SKILL_GROUPS.map((group) => {
@@ -164,15 +149,6 @@ export default function ProgressPage() {
       return { ...group, pct };
     });
   }, [learnerProgress?.skills]);
-
-  const strongestGroups = useMemo(
-    () => [...groupedSkills].sort((a, b) => b.pct - a.pct).slice(0, 2),
-    [groupedSkills],
-  );
-  const weakestGroups = useMemo(
-    () => [...groupedSkills].sort((a, b) => a.pct - b.pct).slice(0, 2),
-    [groupedSkills],
-  );
 
   const trendText = useMemo(() => {
     const comparison = analytics.weekComparison;
@@ -222,41 +198,9 @@ export default function ProgressPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-white/10 bg-card p-4 space-y-3">
-          <p className="text-[11px] uppercase tracking-wider text-accent-light">Strongest now</p>
-          {strongestGroups.map((group) => (
-            <div key={group.key} className="space-y-1">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">{group.label}</span>
-                <span className="text-white/35">{group.pct}%</span>
-              </div>
-              <div className="h-2 rounded-full bg-white/5">
-                <div className="h-2 rounded-full bg-success" style={{ width: `${group.pct}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-card p-4 space-y-3">
-          <p className="text-[11px] uppercase tracking-wider text-accent-light">Needs work</p>
-          {weakestGroups.map((group) => (
-            <div key={group.key} className="space-y-1">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">{group.label}</span>
-                <span className="text-white/35">{group.pct}%</span>
-              </div>
-              <div className="h-2 rounded-full bg-white/5">
-                <div className="h-2 rounded-full bg-warn" style={{ width: `${group.pct}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
       <section className="rounded-2xl border border-white/10 bg-card p-4 space-y-4">
         <div className="space-y-1">
-          <p className="text-[11px] uppercase tracking-wider text-accent-light">Skill snapshot</p>
+          <p className="text-[11px] uppercase tracking-wider text-accent-light">Skills now</p>
           <p className="text-sm text-white/45">Your current development by learner-facing skill area.</p>
         </div>
         <div className="space-y-3">
@@ -271,44 +215,6 @@ export default function ProgressPage() {
               </div>
             </div>
           ))}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-white/10 bg-card p-4 space-y-4">
-        <div className="space-y-1">
-          <p className="text-[11px] uppercase tracking-wider text-accent-light">Practice mix</p>
-          <p className="text-sm text-white/45">How your recent practice time is distributed.</p>
-        </div>
-        <div className="space-y-3">
-          {[
-            { label: "Words review", value: practiceMix.words },
-            { label: "Drills", value: practiceMix.drills },
-            { label: "Conversation", value: practiceMix.conversation },
-          ].map((item) => (
-            <div key={item.label} className="space-y-1.5">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">{item.label}</span>
-                <span className="text-white/35">{item.value.pct}%</span>
-              </div>
-              <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${item.value.pct}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-3 gap-3 text-center">
-          <div className="rounded-xl bg-white/[0.03] p-3">
-            <p className="text-lg font-semibold">{practiceMix.words.count}</p>
-            <p className="text-[10px] text-white/30">Words</p>
-          </div>
-          <div className="rounded-xl bg-white/[0.03] p-3">
-            <p className="text-lg font-semibold">{practiceMix.drills.count}</p>
-            <p className="text-[10px] text-white/30">Drills</p>
-          </div>
-          <div className="rounded-xl bg-white/[0.03] p-3">
-            <p className="text-lg font-semibold">{practiceMix.conversation.count}</p>
-            <p className="text-[10px] text-white/30">Conversation</p>
-          </div>
         </div>
       </section>
 
@@ -385,11 +291,7 @@ export default function ProgressPage() {
         </div>
 
         <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-center text-[11px] text-white/45">
-          {last7Days.activeDays} active days in the last 7 days
-        </div>
-
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-center text-[11px] text-white/45">
-          Today: Words {completedModes[todayStr]?.bronze ?? 0} · Drills {completedModes[todayStr]?.silver ?? 0} · Conversation {completedModes[todayStr]?.gold ?? 0}
+          Last 7 days: {last7Days.activeDays} active day{last7Days.activeDays === 1 ? "" : "s"} · Today: Words {completedModes[todayStr]?.bronze ?? 0} · Drills {completedModes[todayStr]?.silver ?? 0} · Conversation {completedModes[todayStr]?.gold ?? 0}
         </div>
       </section>
     </DashboardShell>

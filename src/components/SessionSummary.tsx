@@ -131,14 +131,14 @@ export default function SessionSummary({
           ? "You reinforced word recall in this session."
           : mode === "gold"
             ? "You practiced carrying a conversation forward."
-            : "You reinforced a focused drill skill in this session.";
+            : "You reinforced a focused practice lane in this session.";
 
     const nextFocus = primaryErrorInsight?.takeaway ?? "Keep building consistency with another short session.";
     const nextAction =
       errorsCount > 0
         ? "Best next step: Practice mistakes."
         : mode === "bronze"
-          ? "Best next step: Build skills."
+          ? "Best next step: Learn patterns."
           : "Best next step: Continue mission.";
 
     return {

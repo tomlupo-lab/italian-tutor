@@ -27,7 +27,7 @@ import type {
 const TIER_ACTIVITY_LABEL: Record<ExerciseMode, string> = {
   bronze: "Review words",
   silver: "Do drills",
-  gold: "Have conversation",
+  gold: "Practice conversation",
 };
 
 const MODE_TARGET_KEY: Record<ExerciseMode, "bronzeReviews" | "silverDrills" | "goldConversations"> = {
@@ -213,9 +213,9 @@ export default function CurrentMissionPage() {
 
       <section className="space-y-3">
         <div className="px-1">
-          <h2 className="text-sm font-semibold">How do you want to move this mission forward?</h2>
+          <h2 className="text-sm font-semibold">Choose the best way to move this scenario forward</h2>
           <p className="mt-1 text-xs text-white/45">
-            Choose the kind of practice that fits this mission step.
+            Use review, drills, or conversation depending on what this mission needs next.
           </p>
         </div>
 
@@ -264,7 +264,13 @@ export default function CurrentMissionPage() {
                     </div>
                     {isRecommended ? (
                       <p className="text-[11px] text-accent-light">Best next step</p>
-                    ) : null}
+                    ) : mode === "bronze" ? (
+                      <p className="text-[11px] text-white/40">Refresh recall before harder practice</p>
+                    ) : mode === "silver" ? (
+                      <p className="text-[11px] text-white/40">Focused pattern and drill work</p>
+                    ) : (
+                      <p className="text-[11px] text-white/40">Integrated scenario practice</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {showReplayBadge ? (

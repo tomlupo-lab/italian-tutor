@@ -6,7 +6,7 @@ import { api } from "../../convex/_generated/api";
 import { getTodayWarsaw } from "@/lib/date";
 import { prettySkillLabel } from "@/lib/labels";
 import { SKILL_BAND_THRESHOLDS, getSkillBandStatus } from "@/lib/skillBands";
-import type { LearnerLevel, LearnerSkill } from "@/lib/missionTypes";
+import type { LearnerStateSnapshot } from "@/lib/missionTypes";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -93,18 +93,16 @@ export function useProgressAnalytics(): ProgressAnalytics {
   const fourteenDaysAgo = dateNDaysAgo(14);
   const sevenDaysAgo = dateNDaysAgo(7);
 
-  const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
-    | { skills?: LearnerSkill[]; level?: LearnerLevel | null }
-    | undefined;
+  const learnerState = useQuery(api.learnerState.getSnapshot, {}) as LearnerStateSnapshot | undefined;
   const sessions = useQuery(api.sessions.getByDateRange, { from: thirtyDaysAgo, to: today }) as Session[] | undefined;
   const allCards = useQuery(api.cards.getAll) as AnyCard[] | undefined;
 
-  const loading = learnerProgress === undefined || sessions === undefined || allCards === undefined;
+  const loading = learnerState === undefined || sessions === undefined || allCards === undefined;
 
   // ── Skill Band Analysis ─────────────────────────────────────────
 
   const skillAnalysis = useMemo(() => {
-    const skills = learnerProgress?.skills ?? [];
+    const skills = learnerState?.skills ?? [];
     if (skills.length === 0) return null;
 
     const secureAtLevel = (skillKey: string, points: number, level: "A1" | "A2" | "B1" | "B2") => {
@@ -146,7 +144,7 @@ export function useProgressAnalytics(): ProgressAnalytics {
       .sort((a, b) => scoreForStrength(b) - scoreForStrength(a) || a.skillKey.localeCompare(b.skillKey))
       .slice(0, 5);
 
-    const cefr = learnerProgress?.level?.currentLevel ?? "A1";
+    const cefr = learnerState?.level?.currentLevel ?? "A1";
 
     const b1Relevant = skills.filter((skill) => typeof SKILL_BAND_THRESHOLDS[skill.skillKey]?.B1?.points === "number");
     const b1Secure = b1Relevant.filter((skill) => secureAtLevel(skill.skillKey, skill.points, "B1")).length;
@@ -169,7 +167,7 @@ export function useProgressAnalytics(): ProgressAnalytics {
       strongest: strongest.map(toInfo),
       b2Activation,
     };
-  }, [learnerProgress?.level?.currentLevel, learnerProgress?.skills]);
+  }, [learnerState?.level?.currentLevel, learnerState?.skills]);
 
   // ── Session Accuracy ────────────────────────────────────────────
 

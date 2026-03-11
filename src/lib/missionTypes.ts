@@ -60,6 +60,30 @@ export interface LearnerLevel {
 export interface LearnerSkill {
   skillKey: string;
   points: number;
+  proficiency?: number;
+  confidence?: number;
+  evidenceCount?: number;
+  recentWeakEvidence?: number;
+  recentStrongEvidence?: number;
+  rollingErrorRate?: number;
+}
+
+export interface AdaptiveFocus {
+  weakSkills: LearnerSkill[];
+  strongSkills: LearnerSkill[];
+  weakErrors: Array<{ errorKey: string; count: number }>;
+  blockers: Array<{ skillKey: string; weakEvidenceCount: number; rollingErrorRate: number }>;
+  recommendedPatterns: string[];
+  recommendedLevel: Level;
+}
+
+export interface LearnerStateSnapshot {
+  learnerId: string;
+  level: LearnerLevel;
+  activeMission: ActiveMissionResult | null;
+  missions: LearnerMission[];
+  skills: LearnerSkill[];
+  adaptiveFocus: AdaptiveFocus;
 }
 
 export interface RoadmapRule {

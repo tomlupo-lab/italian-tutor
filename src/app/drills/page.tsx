@@ -8,40 +8,13 @@ import ExerciseErrorBoundary from "@/components/exercises/ExerciseErrorBoundary"
 import type { Exercise, ExerciseResult } from "@/lib/exerciseTypes";
 import { Loader2, RefreshCw, Target, Shuffle, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { apiPath, withBasePath } from "@/lib/paths";
+import { withBasePath } from "@/lib/paths";
 import { prettySkillLabel } from "@/lib/labels";
-import { getPregeneratedSkillExercises, type SkillFocusKey } from "@/lib/skillPracticeCatalog";
+import { PATTERN_FOCUS_CONFIG, type PatternFocusKey } from "@/lib/patternFocus";
 import { getTodayWarsaw } from "@/lib/date";
 import Link from "next/link";
 
-const SKILL_FOCUS_CONFIG: Record<string, { label: string; types: string[] }> = {
-  vocabulary: {
-    label: "Vocabulary",
-    types: ["cloze", "word_builder", "speed_translation"],
-  },
-  grammar: {
-    label: "Grammar",
-    types: ["cloze", "pattern_drill", "error_hunt"],
-  },
-  listening: {
-    label: "Listening",
-    types: ["speed_translation", "cloze"],
-  },
-  reading: {
-    label: "Reading",
-    types: ["cloze", "error_hunt", "speed_translation"],
-  },
-  speaking: {
-    label: "Speaking",
-    types: ["pattern_drill", "speed_translation"],
-  },
-  conversation: {
-    label: "Conversation",
-    types: ["pattern_drill", "error_hunt", "speed_translation"],
-  },
-};
-
-type PracticeMode = "errors" | "random" | "typed" | "skill";
+type PracticeMode = "errors" | "random" | "typed" | "pattern";
 
 type AnyCard = Record<string, unknown>;
 
@@ -56,12 +29,12 @@ const DRILL_TYPES: { type: string; label: string; emoji: string; description: st
 function getGenerationCopy(
   mode: PracticeMode | null,
   selectedType: string | null,
-  skillFocus: { skill: string; level: string } | null,
+  patternFocus: { pattern: PatternFocusKey; level: string } | null,
 ) {
-  if (mode === "skill" && skillFocus) {
+  if (mode === "pattern" && patternFocus) {
     return {
       title: "Generating drills",
-      detail: `AI is building a fresh ${SKILL_FOCUS_CONFIG[skillFocus.skill]?.label ?? "skill"} batch for ${skillFocus.level}.`,
+      detail: `AI is building a fresh ${PATTERN_FOCUS_CONFIG[patternFocus.pattern]?.label ?? "pattern"} batch for ${patternFocus.level}.`,
     };
   }
   if (mode === "errors") {
@@ -88,7 +61,7 @@ export default function DrillsPage() {
   const [mode, setMode] = useState<PracticeMode | null>(null);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [recoveryFocus, setRecoveryFocus] = useState(false);
-  const [skillFocus, setSkillFocus] = useState<{ skill: string; level: string } | null>(null);
+  const [patternFocus, setPatternFocus] = useState<{ pattern: PatternFocusKey; level: string } | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [current, setCurrent] = useState(0);
   const [results, setResults] = useState<Map<string, ExerciseResult>>(new Map());
@@ -97,12 +70,14 @@ export default function DrillsPage() {
   const [done, setDone] = useState(false);
 
   const allCards = useQuery(api.cards.getAll);
-  const learnerProgress = useQuery(api.missions.getLearnerProgress, {});
+  const learnerState = useQuery(api.learnerState.getSnapshot, {});
+  const currentLevel = learnerState?.level?.currentLevel ?? "A1";
   const practiceExercises = useQuery(
     api.exercises.getForPractice,
-    selectedType ? { limit: 5, types: [selectedType] } : { limit: 5 },
+    selectedType ? { limit: 5, types: [selectedType], level: currentLevel } : { limit: 5, level: currentLevel },
   );
   const bulkAddCards = useMutation(api.cards.bulkAdd);
+  const generatePracticeSet = useMutation(api.exercises.generatePracticeSet);
 
   const recentErrors = useMemo(() => {
     if (!allCards) return [];
@@ -113,8 +88,8 @@ export default function DrillsPage() {
   }, [allCards]);
 
   const activeSkillBlockers = useMemo(() => {
-    return learnerProgress?.missions?.find((mission) => mission.active)?.skillBlockers ?? [];
-  }, [learnerProgress?.missions]);
+    return learnerState?.adaptiveFocus?.blockers ?? [];
+  }, [learnerState?.adaptiveFocus?.blockers]);
 
   const startPractice = useCallback(
     async (selectedMode: PracticeMode, typeFilter?: string) => {
@@ -125,7 +100,7 @@ export default function DrillsPage() {
       setMode(selectedMode);
 
       if (selectedMode === "random" || selectedMode === "typed") {
-        if (typeFilter) setSelectedType(typeFilter);
+        setSelectedType(typeFilter ?? null);
         if (!typeFilter && practiceExercises && practiceExercises.length > 0) {
           setExercises(practiceExercises as Exercise[]);
         } else if (typeFilter) {
@@ -138,25 +113,18 @@ export default function DrillsPage() {
 
       setLoading(true);
       try {
-        const res = await fetch(apiPath("/api/generate-practice"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            count: 5,
-            level: "A2",
-            errors: recentErrors.map((card) => ({
-              it: String(card.it ?? ""),
-              en: String(card.en ?? ""),
-              errorCategory: typeof card.errorCategory === "string" ? card.errorCategory : undefined,
-              example: typeof card.example === "string" ? card.example : undefined,
-            })),
-            types: ["cloze", "pattern_drill", "speed_translation"],
-          }),
+        const data = await generatePracticeSet({
+          count: 5,
+          level: currentLevel,
+          types: ["cloze", "pattern_drill", "speed_translation"],
+          tags: recentErrors
+            .map((card) => (typeof card.tag === "string" ? card.tag : null))
+            .filter((tag): tag is string => Boolean(tag)),
+          errorFocus: recentErrors
+            .map((card) => (typeof card.errorCategory === "string" ? card.errorCategory : null))
+            .filter((focus): focus is string => Boolean(focus)),
         });
-
-        if (!res.ok) throw new Error("Failed to generate exercises");
-        const data = await res.json();
-        setExercises(data.exercises);
+        setExercises(data as Exercise[]);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to generate");
         setMode(null);
@@ -164,13 +132,13 @@ export default function DrillsPage() {
         setLoading(false);
       }
     },
-    [practiceExercises, recentErrors],
+    [currentLevel, generatePracticeSet, practiceExercises, recentErrors],
   );
 
-  const startSkillPractice = useCallback(async (skill: string, level: string) => {
-    const config = SKILL_FOCUS_CONFIG[skill];
+  const startPatternPractice = useCallback(async (pattern: PatternFocusKey, level: string) => {
+    const config = PATTERN_FOCUS_CONFIG[pattern];
     if (!config) {
-      setError("Unknown skill focus");
+      setError("Unknown pattern focus");
       return;
     }
 
@@ -178,40 +146,29 @@ export default function DrillsPage() {
     setResults(new Map());
     setDone(false);
     setError(null);
-    setMode("skill");
-    setSkillFocus({ skill, level });
-
-    const authored = getPregeneratedSkillExercises(skill as SkillFocusKey, level, 5);
-    if (authored.length > 0) {
-      setExercises(authored);
-      setLoading(false);
-      return;
-    }
+    setMode("pattern");
+    setPatternFocus({ pattern, level });
 
     setLoading(true);
     try {
-      const res = await fetch(apiPath("/api/generate-practice"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        const data = await generatePracticeSet({
           count: 5,
           level,
           types: config.types,
-          errors: [],
-        }),
-      });
-
-      if (!res.ok) throw new Error("Failed to generate focused drills");
-      const data = await res.json();
-      setExercises(data.exercises);
+          patternFocus: pattern,
+          tags: config.tags,
+          errorFocus: config.errorFocus,
+          includeSrs: config.includeSrs ?? false,
+        });
+        setExercises(data as Exercise[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate");
       setMode(null);
-      setSkillFocus(null);
+      setPatternFocus(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [generatePracticeSet]);
 
   const prevPracticeRef = useRef(practiceExercises);
   useEffect(() => {
@@ -313,16 +270,16 @@ export default function DrillsPage() {
   }, [results]);
 
   const generationCopy = useMemo(
-    () => getGenerationCopy(mode, selectedType, skillFocus),
-    [mode, selectedType, skillFocus],
+    () => getGenerationCopy(mode, selectedType, patternFocus),
+    [mode, selectedType, patternFocus],
   );
 
   const sessionSummary = useMemo(() => {
-    if (mode === "skill" && skillFocus) {
+    if (mode === "pattern" && patternFocus) {
       return {
-        title: `${SKILL_FOCUS_CONFIG[skillFocus.skill]?.label ?? "Skill"} complete`,
-        subtitle: `${results.size} focused exercises at ${skillFocus.level}`,
-        primary: "Repeat this skill",
+        title: `${PATTERN_FOCUS_CONFIG[patternFocus.pattern]?.label ?? "Pattern"} complete`,
+        subtitle: `${results.size} focused exercises at ${patternFocus.level}`,
+        primary: "Repeat this pattern lane",
       };
     }
     if (mode === "errors") {
@@ -345,7 +302,7 @@ export default function DrillsPage() {
       subtitle: `${results.size} exercises completed`,
       primary: "More drills",
     };
-  }, [mode, results.size, selectedType, skillFocus]);
+  }, [mode, results.size, selectedType, patternFocus]);
 
   const availableCount = practiceExercises?.length ?? 0;
 
@@ -357,36 +314,42 @@ export default function DrillsPage() {
       startPractice("errors");
       return;
     }
-    if (params.get("focus") === "skill") {
-      const skill = params.get("skill");
+    const focus = params.get("focus");
+    if (focus === "pattern" || focus === "skill") {
+      const pattern = (params.get("pattern") ?? params.get("skill")) as PatternFocusKey | null;
       const level = params.get("level") ?? "A1";
-      if (skill && SKILL_FOCUS_CONFIG[skill]) {
-        startSkillPractice(skill, level);
+      if (pattern && PATTERN_FOCUS_CONFIG[pattern]) {
+        startPatternPractice(pattern, level);
       }
     }
-  }, [mode, startPractice, startSkillPractice]);
+  }, [mode, startPractice, startPatternPractice]);
 
   if (!mode || (exercises.length === 0 && !loading)) {
     return (
       <main className="min-h-screen max-w-lg mx-auto px-4 py-6 space-y-6">
         <header className="space-y-1 text-center">
-          <h1 className="text-lg font-semibold">{recoveryFocus ? "Practice mistakes" : skillFocus ? "Build skills" : "Drills"}</h1>
+          <h1 className="text-lg font-semibold">{recoveryFocus ? "Practice mistakes" : patternFocus ? "Learn patterns" : "Drills"}</h1>
           <p className="text-xs text-white/30">
             {recoveryFocus
               ? "Targeted recovery from recent weak spots"
-              : skillFocus
-                ? "Focused practice for one skill area"
-                : "Free practice by drill type"}
+              : patternFocus
+                ? "Focused practice for one reusable language lane"
+                : "Choose a drill lane or launch a quick mixed set"}
           </p>
         </header>
 
-        {skillFocus && (
+        {patternFocus && (
           <div className="rounded-2xl border border-accent/30 bg-accent/10 p-4 space-y-1">
-            <p className="text-[11px] uppercase tracking-wider text-accent-light">Build skills</p>
+            <p className="text-[11px] uppercase tracking-wider text-accent-light">Learn patterns</p>
             <p className="text-sm font-medium">
-              {skillFocus.level} {SKILL_FOCUS_CONFIG[skillFocus.skill]?.label}
+              {patternFocus.level} {PATTERN_FOCUS_CONFIG[patternFocus.pattern]?.label}
             </p>
-            <p className="text-xs text-white/50">Start a short set matched to this skill goal.</p>
+            <p className="text-xs text-white/50">
+              Start a short set matched to this pattern lane.
+              {PATTERN_FOCUS_CONFIG[patternFocus.pattern]?.examples?.[0]
+                ? ` Example: ${PATTERN_FOCUS_CONFIG[patternFocus.pattern]?.examples[0]}`
+                : ""}
+            </p>
           </div>
         )}
 
@@ -403,7 +366,7 @@ export default function DrillsPage() {
                   ? `${recentErrors.length} recent errors ready to target`
                   : "Run a focused recovery set"}
             </p>
-            <p className="text-xs text-white/50">Stay in recovery here, then go back to review or skills.</p>
+            <p className="text-xs text-white/50">Stay in recovery here, then go back to review or patterns.</p>
           </div>
         )}
 
@@ -455,14 +418,14 @@ export default function DrillsPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-white/40 mt-0.5">A varied drill set across formats</p>
+                    <p className="text-xs text-white/40 mt-0.5">A quick varied set when you do not want to choose a lane</p>
                   </div>
                 </div>
               </button>
 
               <section className="space-y-3">
                 <h2 className="text-xs font-medium text-white/30 uppercase tracking-wider px-1">
-                  Choose Drill Type
+                  Or Choose A Drill Type
                 </h2>
                 <div className="grid grid-cols-2 gap-3">
                   <Link
@@ -494,7 +457,7 @@ export default function DrillsPage() {
             </>
           ) : (
             <div className="rounded-2xl border border-white/10 bg-card px-4 py-4 text-sm text-white/55">
-              This page stays focused on recovery. Open drill choice is still available from Build skills or the regular drills page.
+              This page stays focused on recovery. Open drill choice is still available from Learn patterns or the regular drills page.
             </div>
           )}
         </section>
@@ -512,7 +475,7 @@ export default function DrillsPage() {
             <span className="rounded-full border border-accent/30 bg-accent/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-accent-light">
               AI
             </span>
-            <span className="text-xs text-white/35">Live generation</span>
+            <span className="text-xs text-white/35">Shared pool</span>
           </div>
           <Loader2 size={32} className="mx-auto text-accent animate-spin" />
           <div className="space-y-1">
@@ -544,25 +507,25 @@ export default function DrillsPage() {
         </div>
 
         <div className="w-full flex flex-col gap-3">
-          <button
-            onClick={() => {
-              if (mode === "skill" && skillFocus) {
-                startSkillPractice(skillFocus.skill, skillFocus.level);
-                return;
+            <button
+              onClick={() => {
+                if (mode === "pattern" && patternFocus) {
+                  startPatternPractice(patternFocus.pattern, patternFocus.level);
+                  return;
               }
               startPractice(mode);
             }}
             className="w-full px-5 py-3 bg-accent rounded-xl text-sm font-medium hover:bg-accent/80 transition flex items-center justify-center gap-2"
           >
               <RefreshCw size={16} />
-              {mode === "errors" ? "More recovery practice" : mode === "skill" ? "More skill practice" : sessionSummary.primary}
+              {mode === "errors" ? "More recovery practice" : mode === "pattern" ? "More pattern practice" : sessionSummary.primary}
             </button>
-          {mode === "skill" ? (
+          {mode === "pattern" ? (
             <Link
-              href={withBasePath("/skills")}
+              href={withBasePath("/patterns")}
               className="w-full px-5 py-3 bg-card rounded-xl border border-white/10 text-sm text-center"
             >
-              Choose another skill
+              Choose another pattern
             </Link>
           ) : mode === "errors" ? (
             <Link
@@ -606,14 +569,14 @@ export default function DrillsPage() {
         </span>
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent-light">
-          {currentExercise.type.replace("_", " ")}
-        </span>
-        <span className="text-xs text-white/20">
-          {mode === "errors" ? "Recovery set" : mode === "skill" ? "Skill set" : "Drills"}
-        </span>
-      </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent-light">
+            {currentExercise.type.replace("_", " ")}
+          </span>
+          <span className="text-xs text-white/20">
+            {mode === "errors" ? "Recovery set" : mode === "pattern" ? "Pattern set" : "Drills"}
+          </span>
+        </div>
 
       <ExerciseErrorBoundary key={currentExercise._id} onSkip={handleSkip}>
         <ExerciseRenderer

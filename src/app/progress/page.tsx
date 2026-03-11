@@ -14,7 +14,7 @@ import { getErrorInsight } from "@/lib/errorInsights";
 import { getSkillBandStatus } from "@/lib/skillBands";
 import { useProgressAnalytics } from "@/hooks/useProgressAnalytics";
 import { withBasePath } from "@/lib/paths";
-import type { LearnerSkill } from "@/lib/missionTypes";
+import type { LearnerStateSnapshot, LearnerSkill } from "@/lib/missionTypes";
 
 type DayStatus = "gold" | "silver" | "bronze" | "ready" | "empty";
 
@@ -61,9 +61,7 @@ export default function ProgressPage() {
   const selectedDate = todayStr;
 
   const stats = useQuery(api.sessions.getStats);
-  const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
-    | { skills?: LearnerSkill[]; level?: { currentLevel?: string | null } | null }
-    | undefined;
+  const learnerState = useQuery(api.learnerState.getSnapshot, {}) as LearnerStateSnapshot | undefined;
   const recentSessions = useQuery(api.sessions.listRecent, { limit: 200 });
   const dueCards = useQuery(api.cards.getDue, { limit: 999 });
 
@@ -140,7 +138,7 @@ export default function ProgressPage() {
   }, [recentSessions]);
 
   const groupedSkills = useMemo(() => {
-    const skills = learnerProgress?.skills ?? [];
+    const skills = learnerState?.skills ?? [];
     return SKILL_GROUPS.map((group) => {
       const relevant = skills.filter((skill) => group.skillKeys.includes(skill.skillKey));
       const pct = relevant.length > 0
@@ -148,7 +146,7 @@ export default function ProgressPage() {
         : 0;
       return { ...group, pct };
     });
-  }, [learnerProgress?.skills]);
+  }, [learnerState?.skills]);
 
   const trendText = useMemo(() => {
     const comparison = analytics.weekComparison;

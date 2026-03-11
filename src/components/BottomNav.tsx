@@ -8,7 +8,7 @@ import { withBasePath } from "@/lib/paths";
 
 const items = [
   { href: withBasePath("/"), matchHref: "/", label: "Home", icon: Home },
-  { href: withBasePath("/skills"), matchHref: "/skills", label: "Skills", icon: Brain },
+  { href: withBasePath("/patterns"), matchHref: "/patterns", label: "Patterns", icon: Brain },
   { href: withBasePath("/missions"), matchHref: "/missions", label: "Missions", icon: Flag },
   { href: withBasePath("/practice"), matchHref: "/practice", label: "Review", icon: Dumbbell },
   { href: withBasePath("/progress"), matchHref: "/progress", label: "Progress", icon: BarChart3 },

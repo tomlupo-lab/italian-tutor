@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import Link from "next/link";
-import { Loader2, Flame, Zap, BookOpen, TriangleAlert } from "lucide-react";
+import { Flame, Zap, BookOpen, TriangleAlert, Flag, Sparkles } from "lucide-react";
 import { getTodayWarsaw } from "../lib/date";
 import Badge from "@/components/Badge";
 import { DashboardShell } from "@/components/layout/ScreenShell";
@@ -55,13 +55,9 @@ export default function Home() {
   }, [inventoryStatus?.status, activeMission?.missionId, activeMission?.status, today, generating, generateExercises]);
 
   const dueCardsCount = dueCards?.length ?? 0;
+  const streakCount = stats?.streak ?? 0;
 
   const hasDueCards = dueCardsCount > 0;
-  const isFirstRun =
-    stats !== undefined &&
-    stats.totalSessions === 0 &&
-    (learnerProgress?.missions?.length ?? 0) === 0;
-
   const activeProgress = (() => {
     const active = learnerProgress?.missions?.find((m) => m.active);
     if (!active) return null;
@@ -107,62 +103,52 @@ export default function Home() {
     };
   })();
 
-  // Loading state
-  if (stats === undefined || (activeMission?.missionId && inventoryStatus === undefined)) {
-    return (
-      <main className="min-h-screen flex items-center justify-center">
-        <Loader2 size={32} className="text-accent animate-spin" />
-      </main>
-    );
-  }
+  const nextStep = (() => {
+    if ((activeProgress?.active.criticalErrorsCount ?? 0) > 0) {
+      return {
+        href: withBasePath("/drills?focus=recovery"),
+        label: "Practice mistakes",
+        detail:
+          activeProgress?.active.criticalErrorsCount === 1
+            ? "1 critical weak spot is blocking clean mission progress"
+            : `${activeProgress?.active.criticalErrorsCount ?? 0} critical weak spots are blocking clean mission progress`,
+        icon: TriangleAlert,
+        accentClass: "border-warn/30 bg-warn/10 hover:bg-warn/15",
+        iconClass: "text-warn",
+      };
+    }
 
-  // First-run welcome screen
-  if (isFirstRun) {
-    return (
-      <DashboardShell contentClassName="py-12 flex flex-col items-center gap-6 text-center">
-        <div className="space-y-2">
-          <p className="text-4xl">🇮🇹</p>
-          <h1 className="text-2xl font-bold">Ciao! Welcome to Marco</h1>
-          <p className="text-white/50">
-            Your adaptive Italian learning companion.
-          </p>
-        </div>
-        <div className="bg-card rounded-2xl border border-white/10 p-5 space-y-3 w-full text-left">
-          <h2 className="text-sm font-medium">How it works</h2>
-          <ul className="text-xs text-white/50 space-y-2">
-            <li>
-              <strong className="text-white/70">Review words</strong> — Build recall with quick card practice
-            </li>
-            <li>
-              <strong className="text-white/70">Practice mistakes</strong> — Clean up weak spots from recent sessions
-            </li>
-            <li>
-              <strong className="text-white/70">Build skills</strong> — Train grammar, listening, speaking, and more
-            </li>
-          </ul>
-        </div>
-        <p className="text-xs text-white/30">
-          Marco will unlock fresh practice as your mission and review queue fill in.
-          {hasDueCards && " Meanwhile, start with review words."}
-        </p>
-        {hasDueCards ? (
-          <Link
-            href={withBasePath("/practice")}
-            className="px-6 py-3 bg-accent rounded-xl text-sm font-medium"
-          >
-            Review words ({dueCards?.length ?? 0} due)
-          </Link>
-        ) : (
-          <Link
-            href={withBasePath("/progress")}
-            className="px-6 py-3 bg-card rounded-xl border border-white/10 text-sm"
-          >
-            View Progress
-          </Link>
-        )}
-      </DashboardShell>
-    );
-  }
+    if (dueCardsCount > 0) {
+      return {
+        href: withBasePath("/practice"),
+        label: "Review words",
+        detail: `${dueCardsCount} due card${dueCardsCount === 1 ? "" : "s"} ready for recall`,
+        icon: BookOpen,
+        accentClass: "border-accent/20 bg-accent/10 hover:bg-accent/15",
+        iconClass: "text-accent-light",
+      };
+    }
+
+    if (activeProgress?.mission) {
+      return {
+        href: withBasePath("/missions/current"),
+        label: "Continue mission",
+        detail: `${activeProgress.mission.displayLevel ?? activeProgress.mission.level} mission • ${missionProgress?.percent ?? 0}% complete`,
+        icon: Flag,
+        accentClass: "border-accent/20 bg-accent/10 hover:bg-accent/15",
+        iconClass: "text-accent-light",
+      };
+    }
+
+    return {
+      href: withBasePath("/patterns"),
+      label: "Learn patterns",
+      detail: "Train reusable Italian before your next scenario",
+      icon: Sparkles,
+      accentClass: "border-accent/20 bg-accent/10 hover:bg-accent/15",
+      iconClass: "text-accent-light",
+    };
+  })();
 
   return (
     <DashboardShell contentClassName="gap-7">
@@ -171,7 +157,7 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <Flame size={14} className="text-orange-400" />
             <span className="text-[11px] uppercase tracking-wide text-white/45">Streak</span>
-            <span className="text-sm font-semibold">{stats.streak}</span>
+            <span className="text-sm font-semibold">{streakCount}</span>
           </div>
           <div className="h-4 w-px bg-white/10" />
           <div className="flex items-center gap-2">
@@ -183,44 +169,66 @@ export default function Home() {
       </div>
 
       <div className="space-y-4">
-        <Link
-          href={withBasePath("/practice")}
-          className="block rounded-2xl border border-accent/20 bg-accent/10 px-4 py-4 text-left transition hover:bg-accent/15"
-        >
-          <div className="flex items-center gap-2">
-            <BookOpen size={16} className="text-accent-light" />
-            <p className="text-sm font-semibold">Review words</p>
+        <section className="space-y-2">
+          <div className="px-1">
+            <p className="text-[11px] uppercase tracking-wider text-accent-light">Best next step</p>
+            <h1 className="text-base font-semibold">Start here</h1>
           </div>
-          <p className="mt-1 text-[11px] text-white/45">
-            {dueCardsCount > 0 ? `${dueCardsCount} due card${dueCardsCount === 1 ? "" : "s"}` : "Start a short review with modes and filters"}
-          </p>
-        </Link>
-        <div className="grid gap-3 sm:grid-cols-2">
           <Link
-            href={withBasePath("/drills?focus=recovery")}
-            className="rounded-2xl border border-white/10 bg-card px-3 py-4 text-left transition hover:bg-white/[0.03]"
+            href={nextStep.href}
+            className={`block rounded-2xl border px-4 py-4 text-left transition ${nextStep.accentClass}`}
           >
             <div className="flex items-center gap-2">
-              <TriangleAlert size={16} className="text-warn" />
-              <p className="text-sm font-semibold">Practice mistakes</p>
+              <nextStep.icon size={16} className={nextStep.iconClass} />
+              <p className="text-sm font-semibold">{nextStep.label}</p>
             </div>
-            <p className="mt-1 text-[11px] text-white/45">
-              Fix recent weak spots
-            </p>
+            <p className="mt-1 text-[11px] text-white/45">{nextStep.detail}</p>
           </Link>
-          <Link
-            href={withBasePath("/skills")}
-            className="rounded-2xl border border-white/10 bg-card px-3 py-4 text-left transition hover:bg-white/[0.03]"
-          >
-            <div className="flex items-center gap-2">
-              <Zap size={16} className="text-accent-light" />
-              <p className="text-sm font-semibold">Build skills</p>
-            </div>
-            <p className="mt-1 text-[11px] text-white/45">
-              Target grammar, listening, speaking, and more
-            </p>
-          </Link>
-        </div>
+        </section>
+
+        <section className="space-y-2">
+          <div className="px-1">
+            <p className="text-[11px] uppercase tracking-wider text-white/35">More ways to practice</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Link
+              href={withBasePath("/practice")}
+              className="rounded-2xl border border-white/10 bg-card px-3 py-4 text-left transition hover:bg-white/[0.03]"
+            >
+              <div className="flex items-center gap-2">
+                <BookOpen size={16} className="text-accent-light" />
+                <p className="text-sm font-semibold">Review</p>
+              </div>
+              <p className="mt-1 text-[11px] text-white/45">
+                {dueCardsCount > 0 ? `${dueCardsCount} due` : "Short recall session"}
+              </p>
+            </Link>
+            <Link
+              href={withBasePath("/patterns")}
+              className="rounded-2xl border border-white/10 bg-card px-3 py-4 text-left transition hover:bg-white/[0.03]"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles size={16} className="text-accent-light" />
+                <p className="text-sm font-semibold">Patterns</p>
+              </div>
+              <p className="mt-1 text-[11px] text-white/45">
+                Reusable language for drills and missions
+              </p>
+            </Link>
+            <Link
+              href={withBasePath("/missions/current")}
+              className="rounded-2xl border border-white/10 bg-card px-3 py-4 text-left transition hover:bg-white/[0.03]"
+            >
+              <div className="flex items-center gap-2">
+                <Flag size={16} className="text-accent-light" />
+                <p className="text-sm font-semibold">Mission</p>
+              </div>
+              <p className="mt-1 text-[11px] text-white/45">
+                {activeProgress?.mission ? "Integrated scenario practice" : "Choose a challenge"}
+              </p>
+            </Link>
+          </div>
+        </section>
 
         <Link
           href={withBasePath("/missions/current")}

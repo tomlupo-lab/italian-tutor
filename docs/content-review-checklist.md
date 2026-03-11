@@ -1,5 +1,11 @@
 # Content Review Checklist
 
+Related documents:
+
+- [fast-italian-roadmap.md](/home/twilc/projects/italian-tutor/italian-tutor/docs/fast-italian-roadmap.md)
+- [core-italian-sentence-patterns.md](/home/twilc/projects/italian-tutor/italian-tutor/docs/core-italian-sentence-patterns.md)
+- [curriculum-content-model.md](/home/twilc/projects/italian-tutor/italian-tutor/docs/curriculum-content-model.md)
+
 Use this checklist when reviewing learner-facing content in Italian Tutor, including:
 
 - curriculum entries and seed content
@@ -8,6 +14,8 @@ Use this checklist when reviewing learner-facing content in Italian Tutor, inclu
 - badges, labels, and instructional UI copy
 
 The goal is not just "correct Italian." The content should also be teachable, fair, natural, and consistent with the app's progression model.
+
+Use the fast roadmap as the default progression reference, the sentence-pattern document as the reusable language-unit reference, and the curriculum content model as the metadata and authoring contract.
 
 ## Review Process
 
@@ -40,7 +48,9 @@ Fail examples:
 Check:
 
 - Does the item match the intended difficulty?
+- Does it match the intended roadmap phase?
 - Does it assume vocabulary or grammar the learner has not seen yet?
+- Does it depend on sentence patterns that are already established for that phase?
 - Is the explanation short enough for the level?
 - Does the item test one main concept at a time?
 
@@ -129,9 +139,11 @@ Fail examples:
 Check:
 
 - Does the content introduce concepts in a sensible order?
+- Does it align with the fast roadmap phase definitions?
 - Are new concepts reinforced later in drills or summaries?
 - Is there a reasonable ratio of review to new material?
 - Are prerequisite concepts established before dependent ones appear?
+- Are the required sentence patterns and grammar prerequisites explicit enough to judge fairness?
 
 Fail examples:
 
@@ -174,7 +186,9 @@ Use this when reviewing schema-backed content, seed data, or generated records.
 
 Check:
 
+- Is the item mapped to the right phase and CEFR band?
 - Is the content tagged with the right direction, level, topic, or grammar area?
+- Does it reference the right pattern family or grammar target?
 - Are required fields complete?
 - Do example sentences match the target term or rule?
 - Is metadata specific enough to support filtering and spaced review?

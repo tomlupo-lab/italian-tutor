@@ -1,6 +1,8 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { EXERCISE_TEMPLATES } from "./exerciseTemplatesData";
 import { MISSIONS } from "./progressionCatalog";
+import { selectSharedTemplates, type SharedExerciseTemplate } from "./sharedExercisePool";
 
 type GeneratedRow = {
   date: string;
@@ -38,8 +40,34 @@ function stableShuffle<T>(arr: T[], seed: string): T[] {
     .map((x) => x.item);
 }
 
+function isoDateDaysAgo(daysAgo: number): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() - daysAgo);
+  return date.toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
+}
+
+function variantFamilyKey(variantKey?: string): string | null {
+  if (!variantKey) return null;
+  const prefixes = ["pattern-", "cloze-", "translation-", "error-", "conversation-", "reflection-", "srs-", "wb-"];
+  for (const prefix of prefixes) {
+    if (!variantKey.startsWith(prefix)) continue;
+    const tail = variantKey.slice(prefix.length);
+    if (tail.startsWith("fallback-")) return `${prefix}fallback`;
+    const segment = tail.split("-")[0];
+    return `${prefix}${segment || "generic"}`;
+  }
+  return variantKey;
+}
+
 function authoredCountForType(entries: GeneratedRow[], type: string) {
   return entries.filter((entry) => entry.type === type).length;
+}
+
+function normalizeTier(tier: string): "bronze" | "silver" | "gold" {
+  if (tier === "quick") return "bronze";
+  if (tier === "standard") return "silver";
+  if (tier === "deep") return "gold";
+  return tier as "bronze" | "silver" | "gold";
 }
 
 // ── Vocab banks by tag ──────────────────────────────────────────────
@@ -471,257 +499,106 @@ export const generateExercises = mutation({
     const rows: GeneratedRow[] = [];
     let order = 0;
 
-    const authoredLibrary = await ctx.db
-      .query("missionExerciseLibrary")
-      .withIndex("by_mission_order", (q) => q.eq("missionId", missionId))
+    const cardPool = await ctx.db.query("cards").collect();
+
+    const sharedTemplates = EXERCISE_TEMPLATES.map((template) => ({
+      ...template,
+      originMissionId: template.missionId ?? null,
+    })).filter(
+      (template) => template.active && template.level === mission.level
+    ) as SharedExerciseTemplate[];
+
+    const recentRows = await ctx.db
+      .query("exercises")
+      .withIndex("by_date", (q) => q.gte("date", isoDateDaysAgo(10)))
       .collect();
+    const recentVariantKeys = recentRows
+      .map((row) => row.variantKey)
+      .filter((value): value is string => Boolean(value))
+      .slice(-60);
+    const recentFamilies = recentVariantKeys
+      .map((variantKey) => variantFamilyKey(variantKey))
+      .filter((value): value is string => Boolean(value));
+    const recentOriginMissionIds = recentRows
+      .map((row) => row.missionId)
+      .filter((value): value is string => Boolean(value))
+      .slice(-30);
 
-    const authoredRows = stableShuffle(
-      authoredLibrary.filter((entry) => entry.active),
-      seed + "authored"
-    ).map((entry, index) => ({
-      date,
-      type: entry.type,
-      order: index,
-      content: entry.content,
-      skillId: entry.skillId ?? "task_completion",
-      missionId,
-      tier: entry.tier,
-      difficulty: entry.level,
-      source: "mission_topup",
-      completed: false,
-      checkpointId: entry.checkpointId,
-      variantKey: entry.variantKey,
-    }));
+    const relevantCards = stableShuffle(
+      cardPool.filter(
+        (card) =>
+          card.direction === "it_to_en" &&
+          card.level === mission.level &&
+          mission.tags.includes(card.tag ?? "")
+      ),
+      `${seed}:cards`
+    );
 
-    rows.push(...authoredRows);
-    order = rows.length;
-
-    // ── SRS flashcards (Bronze) ─────────────────────────────────
-    const vocabPool: Array<{ it: string; en: string; example?: string; tag: string }> = [];
-    const seen = new Set<string>();
-    for (const tag of mission.tags) {
-      for (const v of TAG_VOCAB[tag] ?? []) {
-        if (!seen.has(v.it)) {
-          seen.add(v.it);
-          vocabPool.push({ ...v, tag });
-        }
-      }
-    }
-    const shuffledVocab = stableShuffle(vocabPool, seed + "srs");
-    const srsCount = Math.max(0, Math.min(mission.exerciseMix.srs - authoredCountForType(rows, "srs"), shuffledVocab.length, 12));
-      for (let i = 0; i < srsCount; i++) {
-        rows.push({
-          date,
-          type: "srs",
-          order: order++,
-          content: {
-            front: shuffledVocab[i].it,
-            back: shuffledVocab[i].en,
-            example: shuffledVocab[i].example ?? shuffledVocab[i].it,
-            tag: shuffledVocab[i].tag,
-            direction: "it_to_en",
-            level: mission.level,
-          },
+    const srsCount = Math.min(mission.exerciseMix.srs, relevantCards.length);
+    for (let i = 0; i < srsCount; i += 1) {
+      const card = relevantCards[i];
+      rows.push({
+        date,
+        type: "srs",
+        order: order++,
+        content: {
+          front: card.it,
+          back: card.en,
+          example: card.example ?? card.it,
+          tag: card.tag,
+          direction: card.direction,
+          level: card.level ?? mission.level,
+        },
         skillId: "vocab_core",
         missionId,
         tier: "bronze",
-        difficulty: mission.level,
+        difficulty: card.level ?? mission.level,
         source: "seed",
         completed: false,
       });
     }
 
-    // ── Cloze (Silver) ──────────────────────────────────────────
-    const relevantCloze = stableShuffle(
-      CLOZE_BANK.filter((c) =>
-        c.focus.some((f) => mission.errorFocus.includes(f))
-      ),
-      seed + "cloze"
-    );
-    const clozeCount = Math.max(0, Math.min(mission.exerciseMix.cloze - authoredCountForType(rows, "cloze"), relevantCloze.length, 6));
-    for (let i = 0; i < clozeCount; i++) {
-      const t = relevantCloze[i];
-      rows.push({
-        date,
-        type: "cloze",
-        order: order++,
-        content: {
-          sentence: t.sentence,
-          blank_index: 0,
-          options: t.options,
-          correct: t.correct,
-          hint: t.hint,
-        },
-        skillId: "grammar_forms",
-        missionId,
-        tier: "silver",
-        difficulty: mission.level,
-        source: "seed",
-        completed: false,
-      });
-    }
+    const mixEntries: Array<[string, number]> = [
+      ["cloze", mission.exerciseMix.cloze],
+      ["word_builder", mission.exerciseMix.wordBuilder],
+      ["pattern_drill", mission.exerciseMix.patternDrill],
+      ["speed_translation", mission.exerciseMix.speedTranslation],
+      ["error_hunt", mission.exerciseMix.errorHunt],
+      ["conversation", mission.exerciseMix.conversation],
+      ["reflection", mission.exerciseMix.reflection],
+    ];
 
-    // ── Word builder (Silver) ───────────────────────────────────
-    const relevantWB = stableShuffle(
-      WORD_BUILDER_BANK.filter(
-        (w) =>
-          w.tags.some((t) => mission.tags.includes(t)) ||
-          w.tags.includes("general")
-      ),
-      seed + "wb"
-    );
-    const wbCount = Math.max(0, Math.min(mission.exerciseMix.wordBuilder - authoredCountForType(rows, "word_builder"), relevantWB.length, 4));
-    for (let i = 0; i < wbCount; i++) {
-      const t = relevantWB[i];
-      const words = t.target.split(" ");
-      const scrambled = stableShuffle(words, seed + "wbs" + i);
-      rows.push({
-        date,
-        type: "word_builder",
-        order: order++,
-        content: {
-          target_sentence: t.target,
-          scrambled_words: scrambled,
-          translation: t.translation,
-        },
-        skillId: "grammar_syntax",
-        missionId,
-        tier: "silver",
-        difficulty: mission.level,
-        source: "seed",
-        completed: false,
+    for (const [type, targetCount] of mixEntries) {
+      if (targetCount <= 0) continue;
+      const selected = selectSharedTemplates(sharedTemplates, {
+        level: mission.level,
+        types: [type],
+        skillIds: mission.primarySkills,
+        tags: mission.tags,
+        errorFocus: mission.errorFocus,
+        recentVariantKeys,
+        recentFamilies,
+        recentOriginMissionIds,
+        limit: targetCount,
+        seed: `${seed}:${type}`,
       });
-    }
 
-    // ── Pattern drills (Silver) ─────────────────────────────────
-    const relevantPD = stableShuffle(
-      PATTERN_DRILLS.filter((p) =>
-        p.focus.some((f) => mission.errorFocus.includes(f))
-      ),
-      seed + "pd"
-    );
-    const pdCount = Math.max(0, Math.min(mission.exerciseMix.patternDrill - authoredCountForType(rows, "pattern_drill"), relevantPD.length, 3));
-    for (let i = 0; i < pdCount; i++) {
-      const t = relevantPD[i];
-      rows.push({
-        date,
-        type: "pattern_drill",
-        order: order++,
-        content: {
-          pattern_name: t.name,
-          pattern_description: t.description,
-          sentences: t.sentences,
-        },
-        skillId: "grammar_forms",
-        missionId,
-        tier: "silver",
-        difficulty: mission.level,
-        source: "seed",
-        completed: false,
-      });
-    }
-
-    // ── Speed translation (Silver) ──────────────────────────────
-    const relevantST = stableShuffle(
-      SPEED_TRANSLATION_BANK.filter((set) =>
-        set.tags.some((tag) => mission.tags.includes(tag))
-      ),
-      seed + "st"
-    );
-    const stCount = Math.max(0, Math.min(mission.exerciseMix.speedTranslation - authoredCountForType(rows, "speed_translation"), relevantST.length, 3));
-    for (let i = 0; i < stCount; i++) {
-      const t = relevantST[i];
-      rows.push({
-        date,
-        type: "speed_translation",
-        order: order++,
-        content: {
-          sentences: t.sentences,
-          time_limit_seconds: 30,
-        },
-        skillId: "listening_literal",
-        missionId,
-        tier: "silver",
-        difficulty: mission.level,
-        source: "seed",
-        completed: false,
-      });
-    }
-
-    // ── Error hunt (Silver) ──────────────────────────────────────
-    const relevantEH = stableShuffle(
-      ERROR_HUNT_BANK.filter((set) =>
-        set.focus.some((focus) => mission.errorFocus.includes(focus))
-      ),
-      seed + "eh"
-    );
-    const ehCount = Math.max(0, Math.min(mission.exerciseMix.errorHunt - authoredCountForType(rows, "error_hunt"), relevantEH.length, 3));
-    for (let i = 0; i < ehCount; i++) {
-      const t = relevantEH[i];
-      rows.push({
-        date,
-        type: "error_hunt",
-        order: order++,
-        content: {
-          sentences: t.sentences,
-        },
-        skillId: "reading_comprehension",
-        missionId,
-        tier: "silver",
-        difficulty: mission.level,
-        source: "seed",
-        completed: false,
-      });
-    }
-
-    // ── Conversation (Gold) ─────────────────────────────────────
-    const relevantConv = stableShuffle(
-      CONVERSATION_BANK.filter((c) =>
-        c.tags.some((t) => mission.tags.includes(t))
-      ),
-      seed + "conv"
-    );
-    const convCount = Math.max(0, Math.min(mission.exerciseMix.conversation - authoredCountForType(rows, "conversation"), relevantConv.length, 2));
-    for (let i = 0; i < convCount; i++) {
-      const t = relevantConv[i];
-      rows.push({
-        date,
-        type: "conversation",
-        order: order++,
-        content: {
-          scenario: t.scenario,
-          target_phrases: t.target_phrases,
-          grammar_focus: t.grammar_focus,
-          difficulty: mission.level,
-          system_prompt: t.system_prompt,
-        },
-        skillId: "speaking_fluency",
-        missionId,
-        tier: "gold",
-        difficulty: mission.level,
-        source: "seed",
-        completed: false,
-      });
-    }
-
-    // ── Reflection (Gold) ───────────────────────────────────────
-    if (mission.exerciseMix.reflection > authoredCountForType(rows, "reflection")) {
-      rows.push({
-        date,
-        type: "reflection",
-        order: order++,
-        content: {
-          prompt: `Reflect on your "${mission.title}" mission progress. What was the most challenging part today?`,
-          follow_up: "What strategy will you use to improve next time?",
-        },
-        skillId: "task_completion",
-        missionId,
-        tier: "gold",
-        difficulty: mission.level,
-        source: "seed",
-        completed: false,
-      });
+      for (const template of selected) {
+        rows.push({
+          date,
+          type: template.type,
+          order: order++,
+          content: template.content,
+          skillId: template.skillId ?? "task_completion",
+          missionId,
+          tier: normalizeTier(template.tier),
+          difficulty: template.level,
+          source: "seed",
+          completed: false,
+          checkpointId: template.checkpointId ?? undefined,
+          variantKey: template.variantKey,
+        });
+      }
     }
 
     // Insert all — use bulkCreate-style dedup by (date, type, order)

@@ -1,9 +1,177 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { EXERCISE_TEMPLATES } from "./exerciseTemplatesData";
+import {
+  pickFallbackTemplates,
+  type SharedExerciseTemplate,
+} from "./sharedExercisePool";
 
 // Warsaw timezone helper
 function warsawToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
+}
+
+function stableHash(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+function stableShuffle<T>(items: T[], seed: string): T[] {
+  return items
+    .map((item, index) => ({ item, sort: stableHash(`${seed}:${index}`) }))
+    .sort((a, b) => a.sort - b.sort)
+    .map((entry) => entry.item);
+}
+
+function isoDateDaysAgo(daysAgo: number): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() - daysAgo);
+  return date.toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
+}
+
+function variantFamilyKey(variantKey?: string): string | null {
+  if (!variantKey) return null;
+  const prefixes = ["pattern-", "cloze-", "translation-", "error-", "conversation-", "reflection-", "srs-", "wb-"];
+  for (const prefix of prefixes) {
+    if (!variantKey.startsWith(prefix)) continue;
+    const tail = variantKey.slice(prefix.length);
+    if (tail.startsWith("fallback-")) return `${prefix}fallback`;
+    const segment = tail.split("-")[0];
+    return `${prefix}${segment || "generic"}`;
+  }
+  return variantKey;
+}
+
+async function recentTemplateHistory(ctx: any, days = 7) {
+  const from = isoDateDaysAgo(days);
+  const rows = await ctx.db
+    .query("exercises")
+    .withIndex("by_date", (q) => q.gte("date", from))
+    .collect();
+
+  const recentVariantKeys = rows
+    .map((row: any) => row.variantKey)
+    .filter((value: string | undefined): value is string => Boolean(value))
+    .slice(-40);
+
+  const recentFamilies = recentVariantKeys
+    .map((variantKey: string) => variantFamilyKey(variantKey))
+    .filter((value: string | null): value is string => Boolean(value));
+
+  const recentOriginMissionIds = rows
+    .map((row: any) => row.missionId)
+    .filter((value: string | undefined): value is string => Boolean(value))
+    .slice(-24);
+
+  return {
+    recentVariantKeys,
+    recentFamilies,
+    recentOriginMissionIds,
+  };
+}
+
+function srsFromCard(card: {
+  _id: string;
+  it: string;
+  en: string;
+  example?: string;
+  tag?: string;
+  level?: string;
+  direction: "it_to_en" | "en_to_it";
+}) {
+  return {
+    _id: `card-${card._id}`,
+    date: warsawToday(),
+    type: "srs",
+    order: 0,
+    content: {
+      front: card.it,
+      back: card.en,
+      example: card.example ?? card.it,
+      tag: card.tag,
+      level: card.level,
+      direction: card.direction,
+    },
+    skillId: "vocab_core",
+    difficulty: card.level ?? "A1",
+    completed: false,
+    source: "seed" as const,
+  };
+}
+
+async function buildSharedPracticeSet(
+  ctx: any,
+  args: {
+    count: number;
+    level: string;
+    types?: string[];
+    patternFocus?: string;
+    tags?: string[];
+    errorFocus?: string[];
+    includeSrs?: boolean;
+    seed: string;
+  }
+) {
+  const desiredTypes = args.types?.filter((type) => type !== "srs") ?? [];
+  const cards = await ctx.db.query("cards").collect();
+  const recentHistory = await recentTemplateHistory(ctx);
+
+  const pool = EXERCISE_TEMPLATES.map((template) => ({
+    ...template,
+    originMissionId: template.missionId ?? null,
+  })) as SharedExerciseTemplate[];
+  const selectedTemplates = pickFallbackTemplates(pool, {
+    level: args.level,
+    types: desiredTypes.length > 0 ? desiredTypes : undefined,
+    skillIds: args.patternFocus === "conversation_repair" ? ["speaking_fluency", "task_completion"] : undefined,
+    patternFocus: args.patternFocus,
+    tags: args.tags,
+    errorFocus: args.errorFocus,
+    recentVariantKeys: recentHistory.recentVariantKeys,
+    recentFamilies: recentHistory.recentFamilies,
+    recentOriginMissionIds: recentHistory.recentOriginMissionIds,
+    limit: args.includeSrs ? Math.max(0, args.count - 1) : args.count,
+    seed: args.seed,
+  });
+
+  const exercises = selectedTemplates.map((template, index) => ({
+    _id: `template:${template.variantKey}:${index}`,
+    date: warsawToday(),
+    type: template.type,
+    order: index,
+    content: template.content,
+    skillId: template.skillId ?? undefined,
+    tier:
+      template.tier === "quick" ? "bronze" : template.tier === "standard" ? "silver" : template.tier === "deep" ? "gold" : template.tier,
+    variantKey: template.variantKey,
+    difficulty: template.level,
+    completed: false,
+    source: "seed" as const,
+  }));
+
+  if (!args.includeSrs) return exercises.slice(0, args.count);
+
+  const relevantCards = stableShuffle(
+    cards.filter(
+      (card) =>
+        card.direction === "it_to_en" &&
+        card.level === args.level &&
+        (!args.tags || args.tags.length === 0 || args.tags.includes(card.tag ?? "")) &&
+        card.source !== "recovery"
+    ),
+    `${args.seed}:cards`
+  );
+
+  if (relevantCards.length === 0) return exercises.slice(0, args.count);
+
+  const srsExercise = srsFromCard(relevantCards[0]);
+  return [srsExercise, ...exercises].slice(0, args.count).map((exercise, index) => ({
+    ...exercise,
+    order: index,
+  }));
 }
 
 const QUICK_TYPES = new Set(["srs"]);
@@ -177,40 +345,42 @@ export const getForPractice = query({
   args: {
     limit: v.optional(v.number()),
     types: v.optional(v.array(v.string())),
+    level: v.optional(v.string()),
+    patternFocus: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const limit = args.limit ?? 5;
-    const allowedTypes = args.types ? new Set(args.types) : null;
+    return buildSharedPracticeSet(ctx, {
+      count: args.limit ?? 5,
+      level: args.level ?? "A1",
+      types: args.types,
+      patternFocus: args.patternFocus ?? undefined,
+      includeSrs: !args.types || args.types.includes("srs"),
+      seed: `query:${args.level ?? "A1"}:${(args.types ?? []).join(",")}:${args.patternFocus ?? "none"}`,
+    });
+  },
+});
 
-    // Get recent exercises (last 200)
-    const all = await ctx.db
-      .query("exercises")
-      .withIndex("by_date")
-      .order("desc")
-      .take(200);
-
-    // Filter by type if specified, exclude conversation/reflection (interactive)
-    const skip = new Set(["conversation", "reflection", "srs"]);
-    const filtered = all.filter(
-      (ex) => !skip.has(ex.type) && (!allowedTypes || allowedTypes.has(ex.type)),
-    );
-
-    // Prioritize uncompleted, then shuffle completed for replay
-    const uncompleted = filtered.filter((ex) => !ex.completed);
-    const completed = filtered.filter((ex) => ex.completed);
-
-    // Simple shuffle using random sort
-    const shuffleArray = <T>(arr: T[]): T[] => {
-      const shuffled = [...arr];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      return shuffled;
-    };
-
-    const pool = [...shuffleArray(uncompleted), ...shuffleArray(completed)];
-    return pool.slice(0, limit);
+export const generatePracticeSet = mutation({
+  args: {
+    count: v.optional(v.number()),
+    level: v.optional(v.string()),
+    types: v.optional(v.array(v.string())),
+    patternFocus: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+    errorFocus: v.optional(v.array(v.string())),
+    includeSrs: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    return buildSharedPracticeSet(ctx, {
+      count: args.count ?? 5,
+      level: args.level ?? "A1",
+      types: args.types,
+      patternFocus: args.patternFocus ?? undefined,
+      tags: args.tags ?? undefined,
+      errorFocus: args.errorFocus ?? undefined,
+      includeSrs: args.includeSrs ?? false,
+      seed: `mutation:${args.level ?? "A1"}:${(args.types ?? []).join(",")}:${args.patternFocus ?? "none"}:${(args.tags ?? []).join(",")}:${(args.errorFocus ?? []).join(",")}`,
+    });
   },
 });
 

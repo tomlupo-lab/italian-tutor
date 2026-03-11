@@ -1,15 +1,18 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { MISSION_EXERCISE_LIBRARY } from "./missionExerciseLibraryData";
+import { EXERCISE_TEMPLATES } from "./exerciseTemplatesData";
 import {
   A1_AUDIT_EXPANSION,
+  A2_AUDIT_EXPANSION,
+  B1_AUDIT_EXPANSION,
   MISSION_TOPUP_PATCHES,
   SEED_CARD_INSERTS,
   SEED_CARD_PATCHES,
 } from "./cardRemediation";
+import { FAST_TRACK_DOCS_SEED_CARDS } from "./fastTrackDocsContent";
 
 // All vocab data inline to avoid importing from src/
-const allVocab = [
+const baseVocab = [
   // ─── A1 Foundations: Daily Survival
   { it: "ciao", en: "hi / hello", example: "Ciao, come stai?", tag: "basics", level: "A1" },
   { it: "buongiorno", en: "good morning", example: "Buongiorno, signora.", tag: "basics", level: "A1" },
@@ -274,90 +277,68 @@ const allVocab = [
   { it: "il casino", en: "the mess / chaos (slang)", example: "Che casino in questa stanza!", tag: "slang", level: "B2" },
 ];
 
+const allVocab = [...baseVocab, ...FAST_TRACK_DOCS_SEED_CARDS];
+
+async function upsertSeedCards(
+  ctx: any,
+  cards: typeof allVocab,
+  today: string,
+) {
+  let added = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  for (const card of cards) {
+    const existing = await ctx.db
+      .query("cards")
+      .withIndex("by_it_direction", (q) => q.eq("it", card.it).eq("direction", "it_to_en"))
+      .first();
+
+    if (existing) {
+      const patch: Record<string, string> = {};
+      if (card.en !== existing.en) patch.en = card.en;
+      if (card.example !== existing.example) patch.example = card.example;
+      if (card.tag !== existing.tag) patch.tag = card.tag;
+      if (card.level !== existing.level) patch.level = card.level;
+
+      if (Object.keys(patch).length > 0) {
+        await ctx.db.patch(existing._id, patch);
+        updated += 1;
+      } else {
+        skipped += 1;
+      }
+      continue;
+    }
+
+    await ctx.db.insert("cards", {
+      it: card.it,
+      en: card.en,
+      example: card.example,
+      tag: card.tag,
+      level: card.level,
+      source: "seed" as const,
+      ease: 2.5,
+      interval: 0,
+      repetitions: 0,
+      nextReview: today,
+      direction: "it_to_en",
+    });
+    added += 1;
+  }
+
+  return {
+    total: cards.length,
+    added,
+    updated,
+    skipped,
+  };
+}
+
 export const seedCards = mutation({
   args: {},
   handler: async (ctx) => {
-    // Check if already seeded
-    const existing = await ctx.db.query("cards").take(1);
-    if (existing.length > 0) {
-      return { status: "already_seeded", count: 0 };
-    }
-
     const today = new Date().toISOString().slice(0, 10);
-    let count = 0;
-
-    // Convex mutations have size limits, so batch in chunks
-    for (const card of allVocab) {
-      await ctx.db.insert("cards", {
-        it: card.it,
-        en: card.en,
-        example: card.example,
-        tag: card.tag,
-        level: card.level,
-        source: "seed" as const,
-        ease: 2.5,
-        interval: 0,
-        repetitions: 0,
-        nextReview: today,
-        direction: "it_to_en",
-      });
-      count++;
-    }
-
-    return { status: "seeded", count };
-  },
-});
-
-export const seedCurriculum = mutation({
-  args: {
-    cards: v.array(
-      v.object({
-        it: v.string(),
-        en: v.string(),
-        example: v.string(),
-        tag: v.string(),
-        level: v.string(),
-      })
-    ),
-  },
-  handler: async (ctx, args) => {
-    const today = new Date().toISOString().slice(0, 10);
-    let added = 0;
-    let skipped = 0;
-
-    for (const card of args.cards) {
-      const existing = await ctx.db
-        .query("cards")
-        .filter((q) => q.eq(q.field("it"), card.it))
-        .first();
-      if (existing) {
-        await ctx.db.patch(existing._id, {
-          ...(card.en && card.en !== existing.en ? { en: card.en } : {}),
-          ...(card.example && card.example !== existing.example ? { example: card.example } : {}),
-          ...(card.tag && card.tag !== existing.tag ? { tag: card.tag } : {}),
-          ...(card.level && card.level !== existing.level ? { level: card.level } : {}),
-        });
-        skipped++;
-        continue;
-      }
-
-      await ctx.db.insert("cards", {
-        it: card.it,
-        en: card.en,
-        example: card.example,
-        tag: card.tag,
-        level: card.level,
-        source: "seed" as const,
-        ease: 2.5,
-        interval: 0,
-        repetitions: 0,
-        nextReview: today,
-        direction: "it_to_en",
-      });
-      added++;
-    }
-
-    return { added, skipped };
+    return upsertSeedCards(ctx, allVocab, today);
   },
 });
 
@@ -401,7 +382,7 @@ export const repairSeedCards = mutation({
       }
     }
 
-    for (const card of [...SEED_CARD_INSERTS, ...A1_AUDIT_EXPANSION]) {
+    for (const card of [...SEED_CARD_INSERTS, ...A1_AUDIT_EXPANSION, ...A2_AUDIT_EXPANSION, ...B1_AUDIT_EXPANSION]) {
       const existing = await ctx.db
         .query("cards")
         .withIndex("by_it_direction", (q) =>
@@ -496,19 +477,22 @@ export const repairResidualExerciseContent = mutation({
     let libraryUpdated = 0;
     let exercisesUpdated = 0;
 
-    const libraryRows = await ctx.db.query("missionExerciseLibrary").collect();
-    for (const row of libraryRows) {
+    const templateRows = await ctx.db.query("exerciseTemplates").collect();
+    for (const row of templateRows) {
       const content = row.content;
       if (!content || !Array.isArray(content.sentences)) continue;
       let changed = false;
       const sentences = content.sentences.map((sentence: any) => {
-        if (sentence?.text === "Vado in stazione alle sei.") {
+        if (
+          sentence?.text === "Vado in stazione alle sei." ||
+          sentence?.text === "Vado a appuntamento alle sei."
+        ) {
           changed = true;
           return {
             ...sentence,
-            text: "Vado a appuntamento alle sei.",
+            text: "Vado al appuntamento alle sei.",
             corrected: "Vado all'appuntamento alle sei.",
-            explanation: "Before a vowel, a + l' contracts to all'.",
+            explanation: "Before a vowel, al contracts to all'.",
           };
         }
         return sentence;
@@ -524,13 +508,16 @@ export const repairResidualExerciseContent = mutation({
       if (!content || !Array.isArray(content.sentences)) continue;
       let changed = false;
       const sentences = content.sentences.map((sentence: any) => {
-        if (sentence?.text === "Vado in stazione alle sei.") {
+        if (
+          sentence?.text === "Vado in stazione alle sei." ||
+          sentence?.text === "Vado a appuntamento alle sei."
+        ) {
           changed = true;
           return {
             ...sentence,
-            text: "Vado a appuntamento alle sei.",
+            text: "Vado al appuntamento alle sei.",
             corrected: "Vado all'appuntamento alle sei.",
-            explanation: "Before a vowel, a + l' contracts to all'.",
+            explanation: "Before a vowel, al contracts to all'.",
           };
         }
         return sentence;
@@ -576,6 +563,7 @@ export const resetAppState = mutation({
       "exerciseEvidence",
       "sessions",
       "exercises",
+      "exerciseTemplates",
       "userMissionProgress",
       "userSkillProgress",
       "userLevelProgress",
@@ -592,64 +580,79 @@ export const resetAppState = mutation({
     }
 
     const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
-    let seededCards = 0;
-    for (const card of allVocab) {
-      await ctx.db.insert("cards", {
-        it: card.it,
-        en: card.en,
-        example: card.example,
-        tag: card.tag,
-        level: card.level,
-        source: "seed" as const,
-        ease: 2.5,
-        interval: 0,
-        repetitions: 0,
-        nextReview: today,
-        direction: "it_to_en",
-      });
-      seededCards++;
-    }
+    const seedResult = await upsertSeedCards(ctx, allVocab, today);
 
     return {
       status: "reset",
       deleted,
-      seededCards,
+      seededCards: seedResult.added,
     };
   },
 });
 
-export const seedMissionExerciseLibrary = mutation({
+export const seedExerciseTemplates = mutation({
   args: {
-    missionId: v.optional(v.string()),
+    originMissionId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const entries = args.missionId
-      ? MISSION_EXERCISE_LIBRARY.filter((entry) => entry.missionId === args.missionId)
-      : MISSION_EXERCISE_LIBRARY;
+    const entries = args.originMissionId
+      ? EXERCISE_TEMPLATES.filter((entry) => entry.missionId === args.originMissionId)
+      : EXERCISE_TEMPLATES;
 
     let inserted = 0;
     let updated = 0;
     for (const entry of entries) {
-      const payload = entry as any;
+      const { missionId, ...rest } = entry as any;
+      const payload = {
+        ...rest,
+        originMissionId: missionId,
+      };
       const existing = await ctx.db
-        .query("missionExerciseLibrary")
-        .withIndex("by_mission_order", (q) => q.eq("missionId", payload.missionId).eq("order", payload.order))
+        .query("exerciseTemplates")
+        .withIndex("by_origin_order", (q) =>
+          q.eq("originMissionId", payload.originMissionId).eq("order", payload.order)
+        )
         .first();
 
       if (existing) {
         await ctx.db.patch(existing._id, payload);
         updated += 1;
       } else {
-        await ctx.db.insert("missionExerciseLibrary", payload);
+        await ctx.db.insert("exerciseTemplates", payload);
         inserted += 1;
       }
     }
 
     return {
-      missionId: args.missionId ?? "all",
+      originMissionId: args.originMissionId ?? "all",
       inserted,
       updated,
       total: entries.length,
+    };
+  },
+});
+
+export const rebuildExerciseTemplates = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const existing = await ctx.db.query("exerciseTemplates").collect();
+    for (const row of existing) {
+      await ctx.db.delete(row._id);
+    }
+
+    let inserted = 0;
+    for (const entry of EXERCISE_TEMPLATES) {
+      const { missionId, ...rest } = entry as any;
+      await ctx.db.insert("exerciseTemplates", {
+        ...rest,
+        originMissionId: missionId,
+      });
+      inserted += 1;
+    }
+
+    return {
+      deleted: existing.length,
+      inserted,
     };
   },
 });

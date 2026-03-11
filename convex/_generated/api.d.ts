@@ -11,13 +11,17 @@
 import type * as backfillMissingDirections from "../backfillMissingDirections.js";
 import type * as cardRemediation from "../cardRemediation.js";
 import type * as cards from "../cards.js";
+import type * as contentAudit from "../contentAudit.js";
 import type * as exerciseGenerator from "../exerciseGenerator.js";
+import type * as exerciseTemplatesData from "../exerciseTemplatesData.js";
 import type * as exercises from "../exercises.js";
-import type * as missionExerciseLibraryData from "../missionExerciseLibraryData.js";
+import type * as fastTrackDocsContent from "../fastTrackDocsContent.js";
+import type * as learnerState from "../learnerState.js";
 import type * as missions from "../missions.js";
 import type * as progressionCatalog from "../progressionCatalog.js";
 import type * as seed from "../seed.js";
 import type * as sessions from "../sessions.js";
+import type * as sharedExercisePool from "../sharedExercisePool.js";
 
 import type {
   ApiFromModules,
@@ -29,13 +33,17 @@ declare const fullApi: ApiFromModules<{
   backfillMissingDirections: typeof backfillMissingDirections;
   cardRemediation: typeof cardRemediation;
   cards: typeof cards;
+  contentAudit: typeof contentAudit;
   exerciseGenerator: typeof exerciseGenerator;
+  exerciseTemplatesData: typeof exerciseTemplatesData;
   exercises: typeof exercises;
-  missionExerciseLibraryData: typeof missionExerciseLibraryData;
+  fastTrackDocsContent: typeof fastTrackDocsContent;
+  learnerState: typeof learnerState;
   missions: typeof missions;
   progressionCatalog: typeof progressionCatalog;
   seed: typeof seed;
   sessions: typeof sessions;
+  sharedExercisePool: typeof sharedExercisePool;
 }>;
 
 /**

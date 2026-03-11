@@ -149,8 +149,8 @@ export default defineSchema({
     .index("by_it", ["it"])
     .index("by_it_direction", ["it", "direction"]),
 
-  missionExerciseLibrary: defineTable({
-    missionId: v.string(),
+  exerciseTemplates: defineTable({
+    originMissionId: v.optional(v.string()),
     level: v.union(
       v.literal("A1"),
       v.literal("A2"),
@@ -176,8 +176,9 @@ export default defineSchema({
     content: v.any(),
     active: v.boolean(),
   })
-    .index("by_mission_order", ["missionId", "order"])
-    .index("by_mission_type", ["missionId", "type"]),
+    .index("by_level_type", ["level", "type"])
+    .index("by_level_skill", ["level", "skillId"])
+    .index("by_origin_order", ["originMissionId", "order"]),
 
   // ── Mission progression catalog (author-defined) ──────────────────
   missionCatalog: defineTable({

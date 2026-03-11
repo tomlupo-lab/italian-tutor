@@ -8,10 +8,7 @@ import { Loader2, Flame, Zap, BookOpen, TriangleAlert } from "lucide-react";
 import { getTodayWarsaw } from "../lib/date";
 import Badge from "@/components/Badge";
 import { DashboardShell } from "@/components/layout/ScreenShell";
-import {
-  inventoryToExerciseCounts,
-  type InventoryStatusResult,
-} from "@/lib/inventoryStatus";
+import { type InventoryStatusResult } from "@/lib/inventoryStatus";
 import { withBasePath } from "@/lib/paths";
 import type {
   ActiveMissionResult,
@@ -57,9 +54,7 @@ export default function Home() {
     }
   }, [inventoryStatus?.status, activeMission?.missionId, activeMission?.status, today, generating, generateExercises]);
 
-  // Count exercises per type — include due SRS cards in Bronze count
   const dueCardsCount = dueCards?.length ?? 0;
-  const exerciseCounts = inventoryToExerciseCounts(inventoryStatus, dueCardsCount);
 
   const hasDueCards = dueCardsCount > 0;
   const isFirstRun =
@@ -136,29 +131,26 @@ export default function Home() {
           <h2 className="text-sm font-medium">How it works</h2>
           <ul className="text-xs text-white/50 space-y-2">
             <li>
-              <strong className="text-white/70">3 tiers</strong> — Bronze
-              (vocab), Silver (drills), Gold (conversation)
+              <strong className="text-white/70">Review words</strong> — Build recall with quick card practice
             </li>
             <li>
-              <strong className="text-white/70">8 exercise types</strong> —
-              Flashcards, cloze, word builder, conversation, and more
+              <strong className="text-white/70">Practice mistakes</strong> — Clean up weak spots from recent sessions
             </li>
             <li>
-              <strong className="text-white/70">Adaptive</strong> — Exercises
-              adapt to your errors and progress
+              <strong className="text-white/70">Build skills</strong> — Train grammar, listening, speaking, and more
             </li>
           </ul>
         </div>
         <p className="text-xs text-white/30">
           Marco will unlock fresh practice as your mission and review queue fill in.
-          {hasDueCards && " Meanwhile, start a Bronze session."}
+          {hasDueCards && " Meanwhile, start with review words."}
         </p>
         {hasDueCards ? (
           <Link
-            href={withBasePath(`/session/${today}?mode=bronze`)}
+            href={withBasePath("/practice")}
             className="px-6 py-3 bg-accent rounded-xl text-sm font-medium"
           >
-            Start Bronze session ({dueCards?.length ?? 0} due)
+            Review words ({dueCards?.length ?? 0} due)
           </Link>
         ) : (
           <Link
@@ -200,7 +192,7 @@ export default function Home() {
             <p className="text-sm font-semibold">Review words</p>
           </div>
           <p className="mt-1 text-[11px] text-white/45">
-            {dueCardsCount > 0 ? `${dueCardsCount} due card${dueCardsCount === 1 ? "" : "s"}` : "All cards with filters and modes"}
+            {dueCardsCount > 0 ? `${dueCardsCount} due card${dueCardsCount === 1 ? "" : "s"}` : "Start a short review with modes and filters"}
           </p>
         </Link>
         <div className="grid gap-3 sm:grid-cols-2">

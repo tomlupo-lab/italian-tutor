@@ -307,7 +307,7 @@ export default function PracticePage() {
         </div>
         <h2 className="text-xl font-semibold">
           {embeddedMode
-            ? "No Bronze cards for this topic"
+            ? "No review cards for this topic"
             : hasActiveFilters || studyAll
               ? "No cards match"
               : "All caught up!"}
@@ -401,7 +401,7 @@ export default function PracticePage() {
       </Link>
       <div className="text-center">
         <p className="text-xs text-white/30">{sessionDate ?? "today"}</p>
-        <h1 className="text-sm font-semibold">Bronze Session</h1>
+        <h1 className="text-sm font-semibold">Review words</h1>
       </div>
       <div className="w-6" />
     </div>
@@ -413,7 +413,7 @@ export default function PracticePage() {
         <div className="w-full space-y-3">
           <div className="flex items-center justify-between gap-3">
             <StudyProgressHeader
-              title="SRS Practice"
+              title="Review words"
               current={idx + 1}
               total={cards.length}
               label={studyAll ? "cards" : "due"}
@@ -452,7 +452,7 @@ export default function PracticePage() {
 
       {embeddedMode ? (
         <StudyProgressHeader
-          title="SRS Practice"
+          title="Review words"
           current={idx + 1}
           total={cards.length}
           label={studyAll ? "cards" : "due"}

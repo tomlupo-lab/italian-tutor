@@ -21,6 +21,14 @@ const SKILL_OPTIONS = [
   { key: "speaking", icon: PenSquare },
   { key: "conversation", icon: MessageSquare },
 ] as const;
+const SKILL_DRILL_PREVIEW: Record<SkillFocusKey, string> = {
+  vocabulary: "flashcards, cloze, and quick translation",
+  grammar: "cloze, pattern drills, and error correction",
+  listening: "listening checks, cloze, and quick recognition",
+  reading: "short-text cloze, correction, and meaning checks",
+  speaking: "pattern drills and fast response practice",
+  conversation: "scenario drills, repair work, and response practice",
+};
 
 export default function SkillsPage() {
   const learner = useQuery(api.missions.getLearnerProgress, {}) as
@@ -39,14 +47,14 @@ export default function SkillsPage() {
         <p className="text-[11px] uppercase tracking-wider text-accent-light">Build skills</p>
         <h1 className="text-lg font-semibold">Choose what to train next</h1>
         <p className="text-sm text-white/45">
-          Start a short drill batch matched to one skill area.
+          Pick one focused lane and launch a short practice set with a clear goal.
         </p>
       </section>
 
       <section className="space-y-3">
         <div className="px-1">
           <h2 className="text-sm font-semibold">Level</h2>
-          <p className="mt-1 text-xs text-white/40">Defaulting to your current level. Change it if needed.</p>
+          <p className="mt-1 text-xs text-white/40">Defaulting to your current level. Change it only if you want harder or easier practice.</p>
         </div>
         <div className="grid grid-cols-4 gap-2">
           {LEVELS.map((level) => (
@@ -69,7 +77,7 @@ export default function SkillsPage() {
 
       <section className="space-y-3">
         <div className="px-1">
-          <h2 className="text-sm font-semibold">Skill focus</h2>
+          <h2 className="text-sm font-semibold">Choose a focus</h2>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           {SKILL_OPTIONS.map((option) => {
@@ -106,6 +114,7 @@ export default function SkillsPage() {
                                 : "Grow useful words and recall them faster"}
                     </p>
                     <p className="text-[11px] text-white/35">{meta.coverageNote}</p>
+                    <p className="text-[11px] text-white/35">You will train with {SKILL_DRILL_PREVIEW[option.key]}.</p>
                   </div>
                 </div>
               </button>
@@ -121,13 +130,13 @@ export default function SkillsPage() {
             {selectedLevel} • {selectedSkillMeta.label}
           </p>
           <p className="text-[11px] text-white/35 pt-1">{selectedSkillMeta.coverageNote}</p>
-          <p className="text-[11px] text-white/35">5 drills • {selectedLevel} • targeted practice set</p>
+          <p className="text-[11px] text-white/35">5 drills • {selectedLevel} • {SKILL_DRILL_PREVIEW[selectedSkill]}</p>
         </div>
         <Link
           href={withBasePath(`/drills?focus=skill&level=${selectedLevel}&skill=${selectedSkill}`)}
           className="inline-flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/20 px-4 py-2 text-sm font-medium text-accent-light"
         >
-          Start drills
+          Start skill practice
           <ArrowRight size={16} />
         </Link>
       </section>

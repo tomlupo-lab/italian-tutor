@@ -395,8 +395,8 @@ export default function SessionSummary({
               )}
               {latestMissionOutcome.appliedCredits && (
                 <p className="text-[11px] text-white/45">
-                  Mission progress: Bronze {latestMissionOutcome.appliedCredits.bronze} · Silver{" "}
-                  {latestMissionOutcome.appliedCredits.silver} · Gold{" "}
+                  Mission progress: Review {latestMissionOutcome.appliedCredits.bronze} · Drills{" "}
+                  {latestMissionOutcome.appliedCredits.silver} · Conversation{" "}
                   {latestMissionOutcome.appliedCredits.gold}
                 </p>
               )}

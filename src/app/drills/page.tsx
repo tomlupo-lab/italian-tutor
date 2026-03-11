@@ -370,9 +370,13 @@ export default function DrillsPage() {
     return (
       <main className="min-h-screen max-w-lg mx-auto px-4 py-6 space-y-6">
         <header className="space-y-1 text-center">
-          <h1 className="text-lg font-semibold">{recoveryFocus ? "Practice mistakes" : "Drills"}</h1>
+          <h1 className="text-lg font-semibold">{recoveryFocus ? "Practice mistakes" : skillFocus ? "Build skills" : "Drills"}</h1>
           <p className="text-xs text-white/30">
-            {recoveryFocus ? "Targeted recovery from recent weak spots" : "Free practice by drill type"}
+            {recoveryFocus
+              ? "Targeted recovery from recent weak spots"
+              : skillFocus
+                ? "Focused practice for one skill area"
+                : "Free practice by drill type"}
           </p>
         </header>
 
@@ -382,7 +386,7 @@ export default function DrillsPage() {
             <p className="text-sm font-medium">
               {skillFocus.level} {SKILL_FOCUS_CONFIG[skillFocus.skill]?.label}
             </p>
-            <p className="text-xs text-white/50">Focused drill batch ready.</p>
+            <p className="text-xs text-white/50">Start a short set matched to this skill goal.</p>
           </div>
         )}
 
@@ -399,7 +403,7 @@ export default function DrillsPage() {
                   ? `${recentErrors.length} recent errors ready to target`
                   : "Run a focused recovery set"}
             </p>
-            <p className="text-xs text-white/50">Best first move before open practice.</p>
+            <p className="text-xs text-white/50">Stay in recovery here, then go back to review or skills.</p>
           </div>
         )}
 
@@ -462,7 +466,7 @@ export default function DrillsPage() {
                 </h2>
                 <div className="grid grid-cols-2 gap-3">
                   <Link
-                    href={withBasePath(`/session/${today}?mode=bronze`)}
+                    href={withBasePath("/practice")}
                     className="text-left rounded-2xl border border-white/10 bg-card p-4 transition active:scale-[0.98] hover:border-white/20"
                   >
                     <span className="text-lg">🗂️</span>
@@ -490,7 +494,7 @@ export default function DrillsPage() {
             </>
           ) : (
             <div className="rounded-2xl border border-white/10 bg-card px-4 py-4 text-sm text-white/55">
-              Open drills stay available from <span className="text-white">Build skills</span> or the regular drills page.
+              This page stays focused on recovery. Open drill choice is still available from Build skills or the regular drills page.
             </div>
           )}
         </section>
@@ -551,7 +555,7 @@ export default function DrillsPage() {
             className="w-full px-5 py-3 bg-accent rounded-xl text-sm font-medium hover:bg-accent/80 transition flex items-center justify-center gap-2"
           >
               <RefreshCw size={16} />
-              {mode === "errors" ? "More recovery practice" : sessionSummary.primary}
+              {mode === "errors" ? "More recovery practice" : mode === "skill" ? "More skill practice" : sessionSummary.primary}
             </button>
           {mode === "skill" ? (
             <Link
@@ -607,7 +611,7 @@ export default function DrillsPage() {
           {currentExercise.type.replace("_", " ")}
         </span>
         <span className="text-xs text-white/20">
-          {mode === "errors" ? "Recovery set" : mode === "skill" ? "Build skills" : "Drills"}
+          {mode === "errors" ? "Recovery set" : mode === "skill" ? "Skill set" : "Drills"}
         </span>
       </div>
 

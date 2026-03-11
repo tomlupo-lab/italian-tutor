@@ -274,7 +274,7 @@ export default function SessionPage() {
           </p>
           {activeProgress && (
             <p className="text-[11px] text-white/40 mt-2">
-              Mission progress: Bronze {activeProgress.bronze} · Silver {activeProgress.silver} · Gold {activeProgress.gold}
+              Mission progress: Review {activeProgress.bronze} · Drills {activeProgress.silver} · Conversation {activeProgress.gold}
               {activeProgress.blocker ? " · Recovery recommended" : ""}
             </p>
           )}

@@ -7,26 +7,28 @@
     "build": "next build",
     "start": "next start",
     "test": "node --test tests/*.test.mjs",
-    "test:e2e": "npx convex run seed:resetAppState && playwright test"
+    "audit:content": "node scripts/run-content-audit.mjs",
+    "test:e2e": "CI=1 npx convex run seed:resetAppState && CI=1 playwright test",
+    "test:e2e:dev": "CI=1 npx convex run seed:resetAppState && CI=1 PLAYWRIGHT_SKIP_WEB_SERVER=1 playwright test"
   },
   "dependencies": {
-    "clsx": "^2.1.1",
-    "convex": "^1.32.0",
-    "lucide-react": "^0.575.0",
-    "next": "^15.3.0",
-    "openai": "^4.77.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "tailwind-merge": "^2.6.0"
+    "clsx": "2.1.1",
+    "convex": "1.32.0",
+    "lucide-react": "0.575.0",
+    "next": "15.5.12",
+    "openai": "4.104.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "tailwind-merge": "2.6.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
-    "@types/node": "^22.10.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "autoprefixer": "^10.4.27",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.19",
-    "typescript": "^5.7.2"
+    "@playwright/test": "1.58.2",
+    "@types/node": "22.19.11",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "autoprefixer": "10.4.27",
+    "postcss": "8.5.6",
+    "tailwindcss": "3.4.19",
+    "typescript": "5.9.3"
   }
 }

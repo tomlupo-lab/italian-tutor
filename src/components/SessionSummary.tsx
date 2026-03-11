@@ -13,10 +13,11 @@ import {
   Target,
   Zap,
 } from "lucide-react";
-import type { ExerciseMode } from "@/lib/exerciseTypes";
+import { EXERCISE_TIER_META, normalizeExerciseMode, type ExerciseMode } from "@/lib/exerciseTypes";
 import Link from "next/link";
 import { prettySkillLabel } from "@/lib/labels";
 import type { SessionSkillImpact } from "@/lib/sessionSkillImpact";
+import { withBasePath } from "@/lib/paths";
 import {
   computeSkillBandReadiness,
   describeCurrentBand,
@@ -40,12 +41,6 @@ interface SessionSummaryProps {
   sessionDate?: string;
   sessionSkillImpact?: SessionSkillImpact | null;
 }
-
-const MODE_LABELS: Record<string, { label: string; emoji: string }> = {
-  quick: { label: "Bronze", emoji: "🥉" },
-  standard: { label: "Silver", emoji: "🥈" },
-  deep: { label: "Gold", emoji: "🥇" },
-};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyCard = Record<string, any>;
@@ -150,13 +145,14 @@ export default function SessionSummary({
   const latestMissionOutcome = useMemo(() => {
     if (!recentSessions) return null;
     const candidates = recentSessions.filter(
-      (s) => s.type === "lesson" && s.date === effectiveDate && s.mode === mode,
+      (s) => s.type === "lesson" && s.date === effectiveDate && normalizeExerciseMode(s.mode) === mode,
     );
     if (candidates.length === 0) return null;
     return candidates.reduce((latest, row) =>
       (row._creationTime ?? 0) > (latest._creationTime ?? 0) ? row : latest,
     );
   }, [effectiveDate, mode, recentSessions]);
+  const latestMissionOutcomeMode = normalizeExerciseMode(latestMissionOutcome?.mode);
 
   const missionSkillSummary = useMemo(() => {
     if (!sessionSkillImpact || sessionSkillImpact.skills.length === 0) return null;
@@ -197,7 +193,7 @@ export default function SessionSummary({
   }, [learnerProgress?.skills, sessionSkillImpact]);
 
   // ── Session score ─────────────────────────────────────────────────
-  const modeInfo = MODE_LABELS[mode] ?? { label: mode, emoji: "📝" };
+  const modeInfo = EXERCISE_TIER_META[mode] ?? { label: mode, emoji: "📝", subtitle: "" };
   const levelMissionStats = useMemo(() => {
     const level = learnerProgress?.level?.currentLevel;
     if (!level || !missionCatalog?.missions) return null;
@@ -252,12 +248,12 @@ export default function SessionSummary({
             </span>
           </div>
           <p className="text-[10px] text-white/30">
-            {mode === "quick"
+            {mode === "bronze"
               ? `${missionSkillSummary.exercisesContributing} reviewed card${missionSkillSummary.exercisesContributing === 1 ? "" : "s"} generated ${missionSkillSummary.totalPoints} vocabulary-weighted skill points.`
               : `${missionSkillSummary.exercisesContributing} completed exercise${missionSkillSummary.exercisesContributing === 1 ? "" : "s"} generated ${missionSkillSummary.totalPoints} total skill points.`}
           </p>
           <p className="text-[10px] text-white/30">
-            {mode === "quick"
+            {mode === "bronze"
               ? "Bronze rule: Again = 1 point, Good = 6 points, Easy = 10 points toward the card's mapped skill."
               : "Session impact rule: each completed exercise adds 1-10 points to its mapped skills based on result quality."}
           </p>
@@ -320,7 +316,7 @@ export default function SessionSummary({
           )}
           {(learnerProgress?.missions?.find((m) => m.active)?.criticalErrorsCount ?? 0) > 0 && (
             <Link
-              href="/exercises?focus=recovery"
+              href={withBasePath("/drills?focus=recovery")}
               className="inline-block px-3 py-1.5 rounded-lg text-xs font-medium border border-warn/30 bg-warn/20 text-warn"
             >
               Recovery block active
@@ -347,17 +343,17 @@ export default function SessionSummary({
               {latestMissionOutcome.checkpointAwardedId && (
                   <p className="text-[11px] text-success">Checkpoint advanced</p>
               )}
-              {latestMissionOutcome.mode === "deep" && latestMissionOutcome.goldContractStatus === "strong" && (
+              {latestMissionOutcomeMode === "gold" && latestMissionOutcome.goldContractStatus === "strong" && (
                 <p className="text-[11px] text-success">Conversation completed and checkpoint advanced.</p>
               )}
-              {latestMissionOutcome.mode === "deep" &&
+              {latestMissionOutcomeMode === "gold" &&
                 latestMissionOutcome.goldContractStatus === "partial" &&
                 !latestMissionOutcome.checkpointAwardedId && (
                   <p className="text-[11px] text-warn">
                     Conversation completed, but the checkpoint did not advance.
                   </p>
                 )}
-              {latestMissionOutcome.mode === "deep" &&
+              {latestMissionOutcomeMode === "gold" &&
                 latestMissionOutcome.goldContractStatus === "missed" && (
                   <p className="text-[11px] text-warn">
                     Conversation did not meet the checkpoint requirement.
@@ -457,7 +453,7 @@ export default function SessionSummary({
             ))}
           </div>
           <Link
-            href="/exercises?focus=recovery"
+            href={withBasePath("/drills?focus=recovery")}
             className="inline-block text-[11px] text-warn"
           >
             Review recent mistakes

@@ -244,7 +244,7 @@ export const bulkCreate = mutation({
         missionId: v.optional(v.string()),
         checkpointId: v.optional(v.string()),
         tier: v.optional(
-          v.union(v.literal("quick"), v.literal("standard"), v.literal("deep"))
+          v.union(v.literal("bronze"), v.literal("silver"), v.literal("gold"))
         ),
         generationReason: v.optional(v.string()),
         variantKey: v.optional(v.string()),

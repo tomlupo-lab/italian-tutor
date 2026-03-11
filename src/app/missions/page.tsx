@@ -1,37 +1,62 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api";
-import { CheckCircle2, Flag, Lock, Loader2, PlayCircle, Target } from "lucide-react";
-import { cn } from "@/lib/cn";
-import Badge from "@/components/Badge";
 import Link from "next/link";
+import { useMutation, useQuery } from "convex/react";
+import { Flag, Loader2, PlayCircle } from "lucide-react";
+import { api } from "../../../convex/_generated/api";
+import Badge from "@/components/Badge";
 import { DashboardShell } from "@/components/layout/ScreenShell";
-import {
-  pickRunnableMode,
-  type InventoryStatusResult,
-} from "@/lib/inventoryStatus";
+import { cn } from "@/lib/cn";
+import { withBasePath } from "@/lib/paths";
 import type {
   CatalogMission,
   LearnerLevel,
   LearnerMission,
   LearnerSkill,
   Level,
-  RoadmapRule,
 } from "@/lib/missionTypes";
 
 const LEVELS: Level[] = ["A1", "A2", "B1", "B2"];
-const missionLevelLabel = (mission: CatalogMission) => mission.displayLevel ?? mission.level;
 
-function prettySkill(skillKey: string): string {
-  return skillKey
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+function missionLevelLabel(mission: CatalogMission) {
+  return mission.displayLevel ?? mission.level;
 }
 
-function checklistTone(done: boolean) {
-  return done ? "text-success" : "text-white/45";
+function missionPercent(mission: CatalogMission, progress?: LearnerMission) {
+  if (!progress) return 0;
+
+  const bronzeTarget = mission.exerciseTargets.bronzeReviews || 0;
+  const silverTarget = mission.exerciseTargets.silverDrills || 0;
+  const goldTarget = mission.exerciseTargets.goldConversations || 0;
+  const bronzeDone = Math.min(progress.credits?.bronze ?? 0, bronzeTarget);
+  const silverDone = Math.min(progress.credits?.silver ?? 0, silverTarget);
+  const goldDone = Math.min(progress.credits?.gold ?? 0, goldTarget);
+  const tierPercents = [
+    bronzeTarget > 0 ? bronzeDone / bronzeTarget : 0,
+    silverTarget > 0 ? silverDone / silverTarget : 0,
+    goldTarget > 0 ? goldDone / goldTarget : 0,
+  ];
+  const activeTiers = tierPercents.filter((_, index) => [bronzeTarget, silverTarget, goldTarget][index] > 0);
+
+  if (activeTiers.length === 0) return 0;
+
+  return Math.round((activeTiers.reduce((sum, value) => sum + value, 0) / activeTiers.length) * 100);
+}
+
+type MissionState = "active" | "recommended" | "completed" | "available";
+
+function stateBadge(state: MissionState) {
+  if (state === "active") {
+    return <Badge tone="accent">Active</Badge>;
+  }
+  if (state === "recommended") {
+    return <Badge tone="accent">Recommended</Badge>;
+  }
+  if (state === "completed") {
+    return <Badge tone="status" status="completed">Completed</Badge>;
+  }
+  return <Badge>Available</Badge>;
 }
 
 export default function MissionsPage() {
@@ -43,13 +68,6 @@ export default function MissionsPage() {
   const learner = useQuery(api.missions.getLearnerProgress, {}) as
     | { missions: LearnerMission[]; level?: LearnerLevel | null; skills?: LearnerSkill[] }
     | undefined;
-  const roadmapData = useQuery(
-    api.missions.getRoadmap,
-    learner?.level?.currentLevel
-      ? { level: learner.level.currentLevel }
-      : "skip",
-  ) as { roadmap?: RoadmapRule | null } | undefined;
-  const dueCards = useQuery(api.cards.getDue, { limit: 999 });
   const seedCatalog = useMutation(api.missions.seedCatalog);
   const setActiveMission = useMutation(api.missions.setActiveMission);
 
@@ -63,87 +81,45 @@ export default function MissionsPage() {
 
   const missionsByLevel = useMemo(() => {
     const grouped: Record<Level, CatalogMission[]> = { A1: [], A2: [], B1: [], B2: [] };
-    for (const m of catalog?.missions ?? []) grouped[m.level as Level].push(m);
-    for (const level of LEVELS) grouped[level].sort((a, b) => a.order - b.order);
+    for (const mission of catalog?.missions ?? []) {
+      grouped[mission.level as Level].push(mission);
+    }
+    for (const level of LEVELS) {
+      grouped[level].sort((a, b) => a.order - b.order);
+    }
     return grouped;
   }, [catalog?.missions]);
 
-  const unlocked = new Set<string>(learner?.level?.unlockedLevels ?? ["A1"]);
   const currentLevel = (learner?.level?.currentLevel as Level | undefined) ?? "A1";
-  const activeMission = learner?.missions?.find((m) => m.active);
+  const activeMission = learner?.missions?.find((mission) => mission.active);
   const activeMissionCatalog = activeMission
-    ? catalog?.missions?.find((m) => m.missionId === activeMission.missionId)
+    ? catalog?.missions?.find((mission) => mission.missionId === activeMission.missionId)
     : undefined;
-  const inventoryStatus = useQuery(
-    api.exercises.getInventoryStatus,
-    activeMission?.missionId
-      ? {
-          date: new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" }),
-          missionId: activeMission.missionId,
-        }
-      : {
-          date: new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" }),
-        },
-  ) as InventoryStatusResult | undefined;
 
-  const unlockChecklist = useMemo(() => {
-    if (!learner?.level || !roadmapData?.roadmap || !catalog?.missions) return null;
-    const roadmap = roadmapData.roadmap;
-    const completed = new Set(
-      learner.missions.filter((m) => m.status === "completed").map((m) => m.missionId),
-    );
-    const doneInPool = catalog.missions
-      .filter((m) => m.level === roadmap.level && completed.has(m.missionId))
-      .map((m) => m.missionId);
-    const optionalDone = doneInPool.filter((id) => !roadmap.requiredMissionIds.includes(id)).length;
-    const requiredDone = roadmap.requiredMissionIds.filter((id) => completed.has(id)).length;
+  const recommendedMission = useMemo(() => {
+    if (!catalog?.missions?.length) return null;
 
-    const skillMap = new Map((learner.skills ?? []).map((s) => [s.skillKey, s.points] as const));
-    const skillChecks = roadmap.skillThresholds.map((rule) => ({
-      ...rule,
-      current: skillMap.get(rule.skillKey) ?? 0,
-    }));
-    const sessions = roadmap.sessionMinimums;
+    if (activeMissionCatalog && activeMission?.status !== "completed") {
+      return activeMissionCatalog;
+    }
 
-    return {
-      requiredDone,
-      requiredTotal: roadmap.requiredMissionIds.length,
-      completedDone: doneInPool.length,
-      completedTarget: roadmap.minCompletedMissions,
-      optionalDone,
-      optionalTarget: roadmap.minOptionalMissions,
-      skillChecks,
-      sessions,
-      currentTier: learner.level.tierCredits ?? { bronze: 0, silver: 0, gold: 0 },
-      currentMinutes: learner.level.minutesTotal ?? 0,
-      currentDays: learner.level.activeDates?.length ?? 0,
-    };
-  }, [learner, roadmapData?.roadmap, catalog?.missions]);
+    const unfinishedCurrentLevel = missionsByLevel[currentLevel].find((mission) => {
+      const progress = progressByMission.get(mission.missionId);
+      return progress?.status !== "completed";
+    });
+    if (unfinishedCurrentLevel) return unfinishedCurrentLevel;
 
-  const recommendedMode = useMemo(() => {
-    if (!activeMission || !activeMissionCatalog) return null;
-    const bronzeMissing = activeMissionCatalog.exerciseTargets.bronzeReviews - (activeMission.credits?.bronze ?? 0);
-    const silverMissing = activeMissionCatalog.exerciseTargets.silverDrills - (activeMission.credits?.silver ?? 0);
-    const goldMissing = activeMissionCatalog.exerciseTargets.goldConversations - (activeMission.credits?.gold ?? 0);
-    if (goldMissing > 0) return "deep";
-    if (silverMissing > 0) return "standard";
-    if (bronzeMissing > 0) return "quick";
-    return "standard";
-  }, [activeMission, activeMissionCatalog]);
-  const runnableMode = useMemo(
-    () =>
-      recommendedMode && inventoryStatus
-        ? pickRunnableMode(recommendedMode, inventoryStatus, dueCards?.length ?? 0)
-        : null,
-    [recommendedMode, inventoryStatus, dueCards?.length],
-  );
-  const nextLevel = roadmapData?.roadmap?.nextLevel;
+    return catalog.missions.find((mission) => {
+      const progress = progressByMission.get(mission.missionId);
+      return progress?.status !== "completed";
+    }) ?? null;
+  }, [activeMission?.status, activeMissionCatalog, catalog?.missions, currentLevel, missionsByLevel, progressByMission]);
 
   useEffect(() => {
-    if (!unlocked.has(selectedLevel)) {
+    if (!LEVELS.includes(selectedLevel)) {
       setSelectedLevel(currentLevel);
     }
-  }, [currentLevel, selectedLevel, unlocked]);
+  }, [currentLevel, selectedLevel]);
 
   const handleSeed = async () => {
     setSeeding(true);
@@ -165,26 +141,29 @@ export default function MissionsPage() {
 
   if (catalog === undefined || learner === undefined) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <Loader2 size={32} className="text-accent animate-spin" />
+      <main className="flex min-h-screen items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-accent" />
       </main>
     );
   }
 
   const hasCatalog = (catalog.missions?.length ?? 0) > 0;
+  const completedCount = learner.missions.filter((mission) => mission.status === "completed").length;
+  const visibleLevel = selectedLevel || currentLevel;
+  const visibleMissions = missionsByLevel[visibleLevel];
 
   return (
-    <DashboardShell>
-      <section className="bg-card rounded-2xl border border-white/10 p-4 space-y-3">
+    <DashboardShell contentClassName="gap-6">
+      <section className="rounded-2xl border border-white/10 bg-card p-4 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs text-white/40 uppercase tracking-wider">Mission Hub</p>
-            <h1 className="text-lg font-semibold mt-0.5">Progression Campaign</h1>
-            <p className="text-xs text-white/45 mt-1">
-              Active level: <span className="text-white/70">{currentLevel}</span>
+            <p className="text-xs uppercase tracking-wider text-white/40">Missions</p>
+            <h1 className="mt-0.5 text-lg font-semibold">Choose your current challenge</h1>
+            <p className="mt-1 text-xs text-white/45">
+              {currentLevel} campaign • {completedCount}/{catalog.missions.length} complete
             </p>
           </div>
-          <Flag size={18} className="text-accent-light mt-1" />
+          <Flag size={18} className="mt-1 text-accent-light" />
         </div>
 
         {!hasCatalog && (
@@ -192,282 +171,179 @@ export default function MissionsPage() {
             onClick={handleSeed}
             disabled={seeding}
             className={cn(
-              "w-full rounded-xl px-4 py-2.5 text-sm font-medium border transition",
-              "bg-accent/20 text-accent-light border-accent/30",
-              seeding && "opacity-60 cursor-not-allowed",
+              "w-full rounded-xl border px-4 py-2.5 text-sm font-medium transition",
+              "border-accent/30 bg-accent/20 text-accent-light",
+              seeding && "cursor-not-allowed opacity-60",
             )}
           >
             {seeding ? "Initializing mission catalog..." : "Initialize mission catalog"}
           </button>
         )}
-
-        {hasCatalog && (
-          <div className="grid grid-cols-4 gap-2">
-            {LEVELS.map((level) => (
-              <div
-                key={level}
-                className={cn(
-                  "rounded-lg border px-2 py-1.5 text-center",
-                  unlocked.has(level)
-                    ? "border-white/15 bg-white/5"
-                    : "border-white/10 bg-white/0 opacity-55",
-                )}
-              >
-                <p className="text-xs font-medium">{level}</p>
-                <p className="text-[10px] text-white/45">
-                  {missionsByLevel[level].filter((m) => progressByMission.get(m.missionId)?.status === "completed").length}/
-                  {missionsByLevel[level].length}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-        {hasCatalog && (
-          <div className="grid grid-cols-4 gap-2 pt-1 border-t border-white/10">
-            {LEVELS.map((level) => (
-              <button
-                key={level}
-                onClick={() => unlocked.has(level) && setSelectedLevel(level)}
-                disabled={!unlocked.has(level)}
-                className={cn(
-                  "rounded-lg border px-2 py-1.5 text-center text-xs transition",
-                  selectedLevel === level
-                    ? "border-accent/40 bg-accent/20 text-accent-light"
-                    : unlocked.has(level)
-                      ? "border-white/15 bg-white/5 text-white/70 hover:border-white/25"
-                      : "border-white/10 bg-white/0 text-white/30 cursor-not-allowed",
-                )}
-              >
-                {level}
-              </button>
-            ))}
-          </div>
-        )}
-        {activeMissionCatalog && (
-          <div className="pt-2 border-t border-white/10 space-y-2">
-            <p className="text-xs text-white/60">
-              Active mission: <span className="text-accent-light">{activeMissionCatalog.title}</span>
-            </p>
-            <div className="flex items-center gap-2">
-              <Link
-                href={
-                  activeMission && (activeMission.criticalErrorsCount ?? 0) > 0
-                    ? "/exercises?focus=recovery"
-                    : runnableMode
-                        ? `/session/${new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" })}?mode=${runnableMode}`
-                        : "/missions"
-                }
-                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-accent/30 bg-accent/20 text-accent-light"
-              >
-                {(activeMission?.criticalErrorsCount ?? 0) > 0
-                  ? "Run recovery session"
-                  : runnableMode
-                    ? `Continue active mission (${runnableMode === "quick" ? "Bronze" : runnableMode === "standard" ? "Silver" : "Gold"})`
-                    : "Preparing next mission content"}
-              </Link>
-              {runnableMode && (activeMission?.criticalErrorsCount ?? 0) === 0 && (
-                <Badge tone="accent" className="text-[11px] py-1">
-                  Recommended now: {runnableMode === "quick" ? "Bronze" : runnableMode === "standard" ? "Silver" : "Gold"}
-                </Badge>
-              )}
-              {(activeMission?.criticalErrorsCount ?? 0) > 0 && (
-                <span className="text-[11px] text-warn">
-                  Blocker: {(activeMission?.criticalErrorsCount ?? 0)} critical errors
-                </span>
-              )}
-            </div>
-          </div>
-        )}
       </section>
 
-      {unlockChecklist && (
-        <section className="bg-card rounded-2xl border border-white/10 p-4 space-y-2">
-          <h2 className="text-sm font-semibold">Unlock {nextLevel ?? "Next Level"}</h2>
-          <p className="text-xs text-white/45">
-            Requirements from your {currentLevel} track
-          </p>
-          <div className="space-y-1 pt-1">
-            <p className={cn("text-xs", checklistTone(unlockChecklist.requiredDone >= unlockChecklist.requiredTotal))}>
-              {unlockChecklist.requiredDone >= unlockChecklist.requiredTotal ? "✓" : "•"} Required missions ({unlockChecklist.requiredDone}/{unlockChecklist.requiredTotal})
-            </p>
-            <p className={cn("text-xs", checklistTone(unlockChecklist.completedDone >= unlockChecklist.completedTarget))}>
-              {unlockChecklist.completedDone >= unlockChecklist.completedTarget ? "✓" : "•"} Total missions ({unlockChecklist.completedDone}/{unlockChecklist.completedTarget})
-            </p>
-            <p className={cn("text-xs", checklistTone(unlockChecklist.optionalDone >= unlockChecklist.optionalTarget))}>
-              {unlockChecklist.optionalDone >= unlockChecklist.optionalTarget ? "✓" : "•"} Optional missions ({unlockChecklist.optionalDone}/{unlockChecklist.optionalTarget})
-            </p>
-            <p
-              className={cn(
-                "text-xs",
-                checklistTone(
-                  unlockChecklist.currentTier.bronze >= unlockChecklist.sessions.bronze &&
-                    unlockChecklist.currentTier.silver >= unlockChecklist.sessions.silver &&
-                    unlockChecklist.currentTier.gold >= unlockChecklist.sessions.gold,
-                ),
-              )}
-            >
-              {unlockChecklist.currentTier.bronze >= unlockChecklist.sessions.bronze &&
-              unlockChecklist.currentTier.silver >= unlockChecklist.sessions.silver &&
-              unlockChecklist.currentTier.gold >= unlockChecklist.sessions.gold
-                ? "✓"
-                : "•"}{" "}
-              Level totals (Bronze {Math.min(unlockChecklist.currentTier.bronze, unlockChecklist.sessions.bronze)}/{unlockChecklist.sessions.bronze} · Silver {Math.min(unlockChecklist.currentTier.silver, unlockChecklist.sessions.silver)}/{unlockChecklist.sessions.silver} · Gold {Math.min(unlockChecklist.currentTier.gold, unlockChecklist.sessions.gold)}/{unlockChecklist.sessions.gold})
-            </p>
-            <p
-              className={cn(
-                "text-xs",
-                checklistTone(
-                  unlockChecklist.currentMinutes >= unlockChecklist.sessions.minutes &&
-                    unlockChecklist.currentDays >= unlockChecklist.sessions.activeDays,
-                ),
-              )}
-            >
-              {unlockChecklist.currentMinutes >= unlockChecklist.sessions.minutes &&
-              unlockChecklist.currentDays >= unlockChecklist.sessions.activeDays
-                ? "✓"
-                : "•"}{" "}
-              Time and consistency ({Math.min(unlockChecklist.currentMinutes, unlockChecklist.sessions.minutes)}/{unlockChecklist.sessions.minutes} min · {Math.min(unlockChecklist.currentDays, unlockChecklist.sessions.activeDays)}/{unlockChecklist.sessions.activeDays} days)
-            </p>
+      {hasCatalog && activeMissionCatalog && activeMission ? (
+        <section className="rounded-2xl border border-white/10 bg-card p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-[11px] uppercase tracking-wider text-accent-light">Current mission</p>
+              <h2 className="text-base font-semibold">{activeMissionCatalog.title}</h2>
+              <p className="text-sm text-white/45">{activeMissionCatalog.summary}</p>
+            </div>
+            {stateBadge("active")}
           </div>
-          <div className="pt-1 border-t border-white/10 space-y-1">
-            {unlockChecklist.skillChecks.slice(0, 6).map((skill) => (
-              <p
-                key={skill.skillKey}
-                className={cn("text-[11px]", checklistTone(skill.current >= skill.minPoints))}
-              >
-                {skill.current >= skill.minPoints ? "✓" : "•"} {prettySkill(skill.skillKey)} ({Math.min(skill.current, skill.minPoints)}/{skill.minPoints})
-              </p>
-            ))}
+          <div className="flex items-center justify-between text-[11px] text-white/40">
+            <span>{missionLevelLabel(activeMissionCatalog)}</span>
+            <span>{missionPercent(activeMissionCatalog, activeMission)}% complete</span>
           </div>
-          <Link href="/progress" className="inline-block text-[11px] text-accent-light">
-            View full skills and error trends
+          <div className="h-2 overflow-hidden rounded-full bg-white/5">
+            <div
+              className="h-full rounded-full bg-accent transition-all duration-500"
+              style={{ width: `${missionPercent(activeMissionCatalog, activeMission)}%` }}
+            />
+          </div>
+          <Link
+            href={withBasePath("/missions/current")}
+            className="inline-flex rounded-xl border border-accent/30 bg-accent/20 px-4 py-2 text-sm font-medium text-accent-light"
+          >
+            Open mission
           </Link>
         </section>
-      )}
+      ) : null}
 
-      {(() => {
-        const level = selectedLevel;
-        const levelMissions = missionsByLevel[level];
-        if (!levelMissions.length) return null;
-        const isUnlocked = unlocked.has(level);
+      {hasCatalog && recommendedMission && recommendedMission.missionId !== activeMissionCatalog?.missionId ? (
+        <section className="rounded-2xl border border-white/10 bg-card p-4 space-y-3">
+          <div className="space-y-1">
+            <p className="text-[11px] uppercase tracking-wider text-accent-light">Recommended next</p>
+            <h2 className="text-base font-semibold">{recommendedMission.title}</h2>
+            <p className="text-sm text-white/45">{recommendedMission.summary}</p>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-white/40">
+            <span>{missionLevelLabel(recommendedMission)}</span>
+            {stateBadge("recommended")}
+          </div>
+          <button
+            onClick={() => activateMission(recommendedMission.missionId)}
+            disabled={workingMissionId !== null}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-xl border px-4 py-2 text-sm font-medium transition",
+              "border-accent/30 bg-accent/20 text-accent-light",
+              workingMissionId !== null && "cursor-not-allowed opacity-60",
+            )}
+          >
+            <PlayCircle size={14} />
+            {workingMissionId === recommendedMission.missionId ? "Setting active..." : "Set active"}
+          </button>
+        </section>
+      ) : null}
 
-        return (
-          <section className="space-y-2">
+      {hasCatalog ? (
+        <section className="space-y-4">
+          <div className="space-y-3">
             <div className="flex items-center justify-between px-1">
-              <h2 className="text-sm font-semibold">{level} Missions</h2>
-              {!isUnlocked && (
-                <span className="text-[10px] text-white/40 flex items-center gap-1">
-                  <Lock size={11} /> locked
-                </span>
-              )}
+              <h2 className="text-sm font-semibold">Browse by level</h2>
+              <p className="text-[11px] text-white/40">{visibleLevel} selected</p>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {LEVELS.map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() => setSelectedLevel(level)}
+                  className={cn(
+                    "rounded-xl border px-3 py-2 text-sm font-medium transition",
+                    visibleLevel === level
+                      ? "border-accent/30 bg-accent/20 text-accent-light"
+                      : "border-white/10 bg-card text-white/70 hover:bg-white/[0.03]",
+                  )}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <section className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-sm font-semibold">{visibleLevel} Missions</h2>
+              <p className="text-[11px] text-white/40">
+                {visibleMissions.filter((mission) => progressByMission.get(mission.missionId)?.status === "completed").length}/
+                {visibleMissions.length} complete
+              </p>
             </div>
 
             <div className="space-y-2">
-              {levelMissions.map((mission) => {
+              {visibleMissions.map((mission) => {
                 const progress = progressByMission.get(mission.missionId);
-                const status = progress?.status ?? "not_started";
                 const isActive = progress?.active ?? false;
-                const completed = status === "completed";
-
-                const bronze = progress?.credits?.bronze ?? 0;
-                const silver = progress?.credits?.silver ?? 0;
-                const gold = progress?.credits?.gold ?? 0;
-                const requiredCheckpointTotal = (mission.checkpoints ?? []).filter((cp) => cp.required).length;
-                const completedCheckpointCount = (progress?.completedCheckpointIds ?? []).filter((id) =>
-                  (mission.checkpoints ?? []).some((cp) => cp.required && cp.id === id),
-                ).length;
-                const nextCheckpoint = (mission.checkpoints ?? []).find(
-                  (cp) => !(progress?.completedCheckpointIds ?? []).includes(cp.id),
-                );
-                const blockers = [
-                  bronze < mission.exerciseTargets.bronzeReviews ? `Bronze ${bronze}/${mission.exerciseTargets.bronzeReviews}` : null,
-                  silver < mission.exerciseTargets.silverDrills ? `Silver ${silver}/${mission.exerciseTargets.silverDrills}` : null,
-                  gold < mission.exerciseTargets.goldConversations ? `Gold ${gold}/${mission.exerciseTargets.goldConversations}` : null,
-                ].filter(Boolean) as string[];
+                const isCompleted = progress?.status === "completed";
+                const isRecommended =
+                  !isActive &&
+                  !isCompleted &&
+                  mission.missionId === recommendedMission?.missionId;
+                const state: MissionState = isActive
+                  ? "active"
+                  : isCompleted
+                    ? "completed"
+                    : isRecommended
+                      ? "recommended"
+                      : "available";
 
                 return (
                   <div
                     key={mission.missionId}
                     className={cn(
-                      "rounded-xl border p-3",
-                      completed
-                        ? "border-success/30 bg-success/10"
-                        : isActive
-                          ? "border-accent/40 bg-accent/10"
-                          : "border-white/10 bg-card",
+                      "rounded-2xl border p-4",
+                      state === "active"
+                        ? "border-accent/30 bg-accent/10"
+                        : state === "recommended"
+                          ? "border-white/15 bg-white/[0.03]"
+                          : state === "completed"
+                            ? "border-success/25 bg-success/10"
+                            : "border-white/10 bg-card",
                     )}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[11px] text-white/45">
-                          {mission.required ? "Required" : "Optional"} · {missionLevelLabel(mission)}
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold">{mission.title}</p>
+                          {stateBadge(state)}
+                        </div>
+                        <p className="text-xs text-white/45">
+                          {missionLevelLabel(mission)} • {mission.summary}
                         </p>
-                        <h3 className="text-sm font-semibold leading-tight mt-0.5">{mission.title}</h3>
-                        <p className="text-xs text-white/45 mt-1">{mission.summary}</p>
                       </div>
-                      {completed ? (
-                        <CheckCircle2 size={16} className="text-success flex-shrink-0 mt-0.5" />
-                      ) : (
-                        <Target size={16} className="text-white/35 flex-shrink-0 mt-0.5" />
-                      )}
                     </div>
 
-                    {completed ? (
-                      <p className="mt-2 text-[11px] text-success">Mission complete</p>
-                    ) : (
-                      <div className="mt-2 space-y-1 text-[11px]">
-                        {blockers.length > 0 && (
-                          <p className="text-white/45">Still needed: {blockers.join(" · ")}</p>
-                        )}
-                        {requiredCheckpointTotal > 0 && (
-                          <p className="text-white/45">
-                            Required checkpoints {completedCheckpointCount}/{requiredCheckpointTotal}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    {nextCheckpoint && (
-                      <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.02] p-2 space-y-1">
-                        <p className="text-[10px] text-white/35 uppercase tracking-wider">Next checkpoint</p>
-                        <p className="text-[11px] text-accent-light">
-                          {nextCheckpoint.title} (min {nextCheckpoint.minScore}%)
-                        </p>
-                      </div>
-                    )}
-
                     <div className="mt-3 flex items-center gap-2">
-                      <button
-                        onClick={() => activateMission(mission.missionId)}
-                        disabled={!isUnlocked || workingMissionId !== null}
-                        className={cn(
-                          "px-3 py-1.5 rounded-lg text-xs font-medium border transition",
-                          isActive
-                            ? "border-accent/40 bg-accent/20 text-accent-light"
-                            : "border-white/15 bg-white/5 text-white/80",
-                          (!isUnlocked || workingMissionId !== null) && "opacity-50 cursor-not-allowed",
-                        )}
-                      >
-                        {workingMissionId === mission.missionId ? (
-                          <span className="inline-flex items-center gap-1">
-                            <Loader2 size={12} className="animate-spin" /> saving
-                          </span>
-                        ) : isActive ? (
-                          "Active"
-                        ) : (
-                          <span className="inline-flex items-center gap-1">
-                            <PlayCircle size={12} /> Set active
-                          </span>
-                        )}
-                      </button>
-                      <span className="text-[11px] text-white/40">{status.replace("_", " ")}</span>
+                      {isActive ? (
+                        <Link
+                          href={withBasePath("/missions/current")}
+                          className="inline-flex rounded-lg border border-accent/30 bg-accent/20 px-3 py-1.5 text-xs font-medium text-accent-light"
+                        >
+                          Open
+                        </Link>
+                      ) : (
+                        <button
+                          onClick={() => activateMission(mission.missionId)}
+                          disabled={workingMissionId !== null}
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                            "border-white/15 bg-white/5 text-white/80",
+                            workingMissionId !== null && "cursor-not-allowed opacity-60",
+                          )}
+                        >
+                          <PlayCircle size={12} />
+                          {workingMissionId === mission.missionId ? "Setting active..." : "Set active"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
               })}
             </div>
           </section>
-        );
-      })()}
+        </section>
+      ) : null}
     </DashboardShell>
   );
 }

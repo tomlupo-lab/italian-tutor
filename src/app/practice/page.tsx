@@ -113,10 +113,10 @@ export default function PracticePage() {
     try {
       const raw = localStorage.getItem(TIER_KEY);
       const parsed = raw ? JSON.parse(raw) : {};
-      const current = parsed?.[sessionDate]?.quick;
+      const current = parsed?.[sessionDate]?.bronze;
       const bestScore = Math.max(Number(current?.bestScore ?? 0), scorePct);
       parsed[sessionDate] = parsed[sessionDate] ?? {};
-      parsed[sessionDate].quick = {
+      parsed[sessionDate].bronze = {
         completed: true,
         bestScore,
         lastCompleted: new Date().toISOString(),

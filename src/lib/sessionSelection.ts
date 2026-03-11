@@ -33,17 +33,17 @@ export const SESSION_BLUEPRINTS: Record<
   ExerciseMode,
   { duration: string; summary: string; sessionLabel: string }
 > = {
-  quick: {
+  bronze: {
     duration: "~5 min",
     summary: "20 cards with up to 3 due-review repeats.",
     sessionLabel: "20-card recall sprint",
   },
-  standard: {
+  silver: {
     duration: "~10 min",
     summary: "Balanced drill set tuned to about 10 minutes of structured practice.",
     sessionLabel: "8-10 drill practice block",
   },
-  deep: {
+  gold: {
     duration: "~15 min",
     summary: "One mission conversation plus reflection when available.",
     sessionLabel: "1 conversation checkpoint",
@@ -86,7 +86,7 @@ export function selectSessionExercises(args: {
 }): Exercise[] {
   const ordered = pickUncompletedFirst(args.exercises);
 
-  if (args.mode === "quick") {
+  if (args.mode === "bronze") {
     const missionCards = ordered.filter((exercise) => exercise.type === "srs");
     const reviewCards = (args.dueCards ?? [])
       .slice(0, BRONZE_REVIEW_CAP)
@@ -95,7 +95,7 @@ export function selectSessionExercises(args: {
     return [...reviewCards, ...missionCards.slice(0, missionCount)];
   }
 
-  if (args.mode === "standard") {
+  if (args.mode === "silver") {
     const selected: Exercise[] = [];
     const selectedIds = new Set<string>();
     let effort = 0;

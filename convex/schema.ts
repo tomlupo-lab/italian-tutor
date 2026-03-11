@@ -17,7 +17,7 @@ export default defineSchema({
     missionId: v.optional(v.string()), // active mission context if generated for a mission
     checkpointId: v.optional(v.string()), // active checkpoint/subgoal if applicable
     tier: v.optional(
-      v.union(v.literal("quick"), v.literal("standard"), v.literal("deep"))
+      v.union(v.literal("bronze"), v.literal("silver"), v.literal("gold"))
     ),
     generationReason: v.optional(v.string()), // low_inventory|recovery|session_followup|mission_change
     variantKey: v.optional(v.string()), // dedupe or rotate scenario variants
@@ -44,7 +44,7 @@ export default defineSchema({
       v.literal("free_talk"),
       v.literal("speaking_practice")
     ),
-    mode: v.optional(v.string()), // quick|standard|deep (new adaptive engine)
+    mode: v.optional(v.string()), // bronze|silver|gold (new adaptive engine)
     exercisesCompleted: v.optional(v.number()),
     exercisesTotal: v.optional(v.number()),
     // Warmup results (legacy)
@@ -148,7 +148,7 @@ export default defineSchema({
       v.literal("B2")
     ),
     type: v.string(),
-    tier: v.union(v.literal("quick"), v.literal("standard"), v.literal("deep")),
+    tier: v.union(v.literal("bronze"), v.literal("silver"), v.literal("gold")),
     order: v.number(),
     title: v.optional(v.string()),
     checkpointId: v.optional(v.string()),

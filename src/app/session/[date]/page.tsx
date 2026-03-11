@@ -7,7 +7,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import type { Exercise, ExerciseMode } from "@/lib/exerciseTypes";
-import { MODE_TYPES } from "@/lib/exerciseTypes";
+import { EXERCISE_TIER_META, MODE_TYPES, normalizeExerciseMode } from "@/lib/exerciseTypes";
 import ExerciseFlow from "@/components/exercises/ExerciseFlow";
 import ModeSelector from "@/components/ModeSelector";
 import { MissionShell, StudyShell } from "@/components/layout/ScreenShell";
@@ -16,18 +16,13 @@ import {
   inventoryToExerciseCounts,
   type InventoryStatusResult,
 } from "@/lib/inventoryStatus";
+import { withBasePath } from "@/lib/paths";
 import { selectSessionExercises } from "@/lib/sessionSelection";
 import type {
   ActiveMissionResult,
   CatalogMission,
   LearnerMission,
 } from "@/lib/missionTypes";
-
-const MODE_LABELS: Record<ExerciseMode, string> = {
-  quick: "Bronze",
-  standard: "Silver",
-  deep: "Gold",
-};
 
 interface DueCard {
   _id: string;
@@ -51,7 +46,7 @@ export default function SessionPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const dateParam = params.date as string;
-  const modeParam = searchParams.get("mode") as ExerciseMode | null;
+  const modeParam = normalizeExerciseMode(searchParams.get("mode")) ?? null;
 
   const [selectedMode, setSelectedMode] = useState<ExerciseMode | null>(
     modeParam,
@@ -74,7 +69,7 @@ export default function SessionPage() {
     | { missions: CatalogMission[] }
     | undefined;
   const dueCardsCount = dueCards?.length ?? 0;
-  const isQuickMode = selectedMode === "quick";
+  const isQuickMode = selectedMode === "bronze";
 
   // Count exercises per type (for mode selector)
   const exerciseCounts = useMemo(
@@ -90,7 +85,7 @@ export default function SessionPage() {
     const available = new Set<ExerciseMode>();
     const missionTypes = new Set(candidateExercises.map((ex) => ex.type));
 
-    if (missionTypes.has("srs") || dueCardsCount > 0) available.add("quick");
+    if (missionTypes.has("srs") || dueCardsCount > 0) available.add("bronze");
     if (
       missionTypes.has("cloze") ||
       missionTypes.has("word_builder") ||
@@ -98,10 +93,10 @@ export default function SessionPage() {
       missionTypes.has("speed_translation") ||
       missionTypes.has("error_hunt")
     ) {
-      available.add("standard");
+      available.add("silver");
     }
     if (missionTypes.has("conversation") || missionTypes.has("reflection")) {
-      available.add("deep");
+      available.add("gold");
     }
 
     return Array.from(available);
@@ -152,7 +147,7 @@ export default function SessionPage() {
     }));
     return selectSessionExercises({
       mode: selectedMode,
-      exercises: selectedMode === "quick" ? shuffled(missionExercises) : missionExercises,
+      exercises: selectedMode === "bronze" ? shuffled(missionExercises) : missionExercises,
       dueCards: normalizedDueCards,
       date: dateParam,
     });
@@ -188,7 +183,7 @@ export default function SessionPage() {
           Marco will unlock mission practice as inventory is generated for your active mission.
         </p>
         <Link
-          href="/"
+          href={withBasePath("/")}
           className="px-4 py-2 bg-accent rounded-xl text-sm hover:bg-accent/80 transition"
         >
           Back to Home
@@ -207,7 +202,7 @@ export default function SessionPage() {
       ].join(" ")}
     >
       <Link
-        href="/"
+        href={withBasePath("/")}
         className="p-2 -ml-2 rounded-lg hover:bg-white/5 transition text-white/50 hover:text-white"
       >
         <ArrowLeft size={20} />
@@ -215,7 +210,7 @@ export default function SessionPage() {
       <div className="flex-1 min-w-0">
         <h1 className="text-sm font-semibold">
           {selectedMode
-            ? `${MODE_LABELS[selectedMode]} Session`
+            ? `${EXERCISE_TIER_META[selectedMode].label} Session`
             : "Choose Tier"}
         </h1>
         <p className="text-xs text-white/30">{dateParam}</p>
@@ -242,7 +237,7 @@ export default function SessionPage() {
   ) : modeExercises.length === 0 ? (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
       <p className="text-white/50">
-        No {MODE_LABELS[selectedMode]} exercises available
+        No {EXERCISE_TIER_META[selectedMode].label} exercises available
       </p>
       <button
         onClick={() => setSelectedMode(null)}

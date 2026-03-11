@@ -8,6 +8,7 @@ import { prettySkillLabel } from "@/lib/labels";
 import { computeSkillBandReadiness, describeCurrentBand, describeNextTarget, getSkillBandStatus } from "@/lib/skillBands";
 import Link from "next/link";
 import type { LearnerLevel, LearnerSkill } from "@/lib/missionTypes";
+import { withBasePath } from "@/lib/paths";
 
 /**
  * Compact skills progress widget for the home page.
@@ -62,7 +63,7 @@ export default function SkillsWidget() {
 
   return (
     <Link
-      href="/progress"
+      href={withBasePath("/progress")}
       className="block bg-card rounded-2xl border border-white/10 p-4 space-y-3 hover:border-accent/30 transition"
     >
       {/* Header */}

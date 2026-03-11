@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Dumbbell, BarChart3, Flag } from "lucide-react";
+import { Home, Dumbbell, BarChart3, Flag, Brain } from "lucide-react";
 import { cn } from "../lib/cn";
+import { withBasePath } from "@/lib/paths";
 
 const items = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/missions", label: "Missions", icon: Flag },
-  { href: "/exercises", label: "Drills", icon: Dumbbell },
-  { href: "/progress", label: "Progress", icon: BarChart3 },
+  { href: withBasePath("/"), matchHref: "/", label: "Home", icon: Home },
+  { href: withBasePath("/skills"), matchHref: "/skills", label: "Skills", icon: Brain },
+  { href: withBasePath("/missions"), matchHref: "/missions", label: "Missions", icon: Flag },
+  { href: withBasePath("/drills"), matchHref: "/drills", label: "Drills", icon: Dumbbell },
+  { href: withBasePath("/progress"), matchHref: "/progress", label: "Progress", icon: BarChart3 },
 ];
 
 export const NAV_SPACER_CLASS = "h-[100px]";
@@ -25,8 +27,8 @@ export default function BottomNav() {
       <div className="max-w-lg mx-auto flex items-center justify-around">
         {items.map((item) => {
           const active =
-            pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(item.href));
+            pathname === item.matchHref ||
+            (item.matchHref !== "/" && pathname.startsWith(item.matchHref));
           const Icon = item.icon;
           return (
             <Link

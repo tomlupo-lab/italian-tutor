@@ -8,6 +8,8 @@ import Link from "next/link";
 import { ArrowLeft, Clock3, Loader2, TriangleAlert } from "lucide-react";
 import Badge from "@/components/Badge";
 import { DashboardShell } from "@/components/layout/ScreenShell";
+import { normalizeExerciseMode } from "@/lib/exerciseTypes";
+import { withBasePath } from "@/lib/paths";
 
 type SessionRow = {
   _id: string;
@@ -29,9 +31,9 @@ type SessionRow = {
 };
 
 const MODE_LABELS: Record<string, string> = {
-  quick: "Bronze",
-  standard: "Silver",
-  deep: "Gold",
+  bronze: "Bronze",
+  silver: "Silver",
+  gold: "Gold",
 };
 
 export default function SessionHistoryPage() {
@@ -62,7 +64,7 @@ export default function SessionHistoryPage() {
     <DashboardShell>
       <div className="flex items-center gap-3">
         <Link
-          href="/progress"
+          href={withBasePath("/progress")}
           className="p-2 -ml-2 rounded-lg hover:bg-white/5 transition text-white/50 hover:text-white"
         >
           <ArrowLeft size={20} />
@@ -105,7 +107,7 @@ export default function SessionHistoryPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <Badge tone="accent" className="uppercase tracking-wider border-0">
-                    {MODE_LABELS[session.mode ?? ""] ?? session.type}
+                    {MODE_LABELS[normalizeExerciseMode(session.mode) ?? ""] ?? session.type}
                   </Badge>
                   <h2 className="text-sm font-semibold mt-0.5">Session {sessions.length - index}</h2>
                 </div>

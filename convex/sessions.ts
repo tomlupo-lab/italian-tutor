@@ -129,7 +129,7 @@ export const getModeCounts = query({
       .order("desc")
       .take(500);
 
-    const counts: Record<string, number> = { quick: 0, standard: 0, deep: 0 };
+    const counts: Record<string, number> = { bronze: 0, silver: 0, gold: 0 };
     for (const s of sessions) {
       if (s.mode && s.mode in counts) {
         counts[s.mode]++;

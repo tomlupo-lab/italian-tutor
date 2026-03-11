@@ -10,7 +10,7 @@ type GeneratedRow = {
   content: any;
   skillId: string;
   missionId: string;
-  tier: "quick" | "standard" | "deep";
+  tier: "bronze" | "silver" | "gold";
   difficulty: string;
   source: string;
   completed: boolean;
@@ -519,7 +519,7 @@ export const generateExercises = mutation({
           },
         skillId: "vocab_core",
         missionId,
-        tier: "quick",
+        tier: "bronze",
         difficulty: mission.level,
         source: "seed",
         completed: false,
@@ -549,7 +549,7 @@ export const generateExercises = mutation({
         },
         skillId: "grammar_forms",
         missionId,
-        tier: "standard",
+        tier: "silver",
         difficulty: mission.level,
         source: "seed",
         completed: false,
@@ -581,7 +581,7 @@ export const generateExercises = mutation({
         },
         skillId: "grammar_syntax",
         missionId,
-        tier: "standard",
+        tier: "silver",
         difficulty: mission.level,
         source: "seed",
         completed: false,
@@ -609,7 +609,7 @@ export const generateExercises = mutation({
         },
         skillId: "grammar_forms",
         missionId,
-        tier: "standard",
+        tier: "silver",
         difficulty: mission.level,
         source: "seed",
         completed: false,
@@ -636,7 +636,7 @@ export const generateExercises = mutation({
         },
         skillId: "listening_literal",
         missionId,
-        tier: "standard",
+        tier: "silver",
         difficulty: mission.level,
         source: "seed",
         completed: false,
@@ -662,7 +662,7 @@ export const generateExercises = mutation({
         },
         skillId: "reading_comprehension",
         missionId,
-        tier: "standard",
+        tier: "silver",
         difficulty: mission.level,
         source: "seed",
         completed: false,
@@ -692,7 +692,7 @@ export const generateExercises = mutation({
         },
         skillId: "speaking_fluency",
         missionId,
-        tier: "deep",
+        tier: "gold",
         difficulty: mission.level,
         source: "seed",
         completed: false,
@@ -711,7 +711,7 @@ export const generateExercises = mutation({
         },
         skillId: "task_completion",
         missionId,
-        tier: "deep",
+        tier: "gold",
         difficulty: mission.level,
         source: "seed",
         completed: false,
@@ -740,7 +740,7 @@ export const generateExercises = mutation({
           skillId: row.skillId,
           missionId: row.missionId,
           checkpointId: row.checkpointId,
-          tier: row.tier as "quick" | "standard" | "deep",
+          tier: row.tier as "bronze" | "silver" | "gold",
           variantKey: row.variantKey,
           difficulty: row.difficulty,
           source: row.source,

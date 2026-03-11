@@ -1,7 +1,7 @@
 "use client";
 
 import type { ExerciseMode } from "@/lib/exerciseTypes";
-import { MODE_TYPES } from "@/lib/exerciseTypes";
+import { MODE_TYPES, normalizeExerciseMode } from "@/lib/exerciseTypes";
 import { cn } from "@/lib/cn";
 import Badge from "@/components/Badge";
 import { Trophy, RotateCcw } from "lucide-react";
@@ -27,12 +27,23 @@ interface TierScore {
 function loadTierScores(): Record<string, Record<string, TierScore>> {
   if (typeof window === "undefined") return {};
   const raw = localStorage.getItem(TIER_KEY);
-  return raw ? JSON.parse(raw) : {};
+  const parsed = raw ? JSON.parse(raw) : {};
+  for (const date of Object.keys(parsed)) {
+    const entry = parsed[date] ?? {};
+    for (const key of Object.keys(entry)) {
+      const normalized = normalizeExerciseMode(key);
+      if (normalized && normalized !== key) {
+        entry[normalized] = entry[normalized] ?? entry[key];
+      }
+    }
+  }
+  return parsed;
 }
 
 function getTierScore(date: string, mode: string): TierScore | null {
   const data = loadTierScores();
-  return data[date]?.[mode] ?? null;
+  const normalized = normalizeExerciseMode(mode) ?? mode;
+  return data[date]?.[normalized] ?? data[date]?.[mode] ?? null;
 }
 
 const MODES: {
@@ -45,7 +56,7 @@ const MODES: {
   emptyHint: string;
 }[] = [
   {
-    mode: "quick",
+    mode: "bronze",
     label: "Bronze",
     emoji: "🥉",
     duration: "~5 min",
@@ -54,7 +65,7 @@ const MODES: {
     emptyHint: "No due cards or Bronze reviews yet",
   },
   {
-    mode: "standard",
+    mode: "silver",
     label: "Silver",
     emoji: "🥈",
     duration: "~10 min",
@@ -63,7 +74,7 @@ const MODES: {
     emptyHint: "Complete lessons or recovery work to unlock drills",
   },
   {
-    mode: "deep",
+    mode: "gold",
     label: "Gold",
     emoji: "🥇",
     duration: "~15 min",
@@ -85,9 +96,9 @@ export default function ModeSelector({
 
   useEffect(() => {
     setScores({
-      quick: getTierScore(scoreDate, "quick"),
-      standard: getTierScore(scoreDate, "standard"),
-      deep: getTierScore(scoreDate, "deep"),
+      bronze: getTierScore(scoreDate, "bronze"),
+      silver: getTierScore(scoreDate, "silver"),
+      gold: getTierScore(scoreDate, "gold"),
     });
   }, [scoreDate]);
 

@@ -5,8 +5,30 @@
 
 // ── Exercise modes ────────────────────────────────────────────────────
 
-export type ExerciseMode = "quick" | "standard" | "deep";
+export type ExerciseMode = "bronze" | "silver" | "gold";
 export type ExerciseTier = ExerciseMode;
+export type LegacyExerciseMode = "quick" | "standard" | "deep";
+
+export const EXERCISE_TIER_META: Record<
+  ExerciseMode,
+  { label: "Bronze" | "Silver" | "Gold"; emoji: string; subtitle: string }
+> = {
+  bronze: { label: "Bronze", emoji: "🥉", subtitle: "Card" },
+  silver: { label: "Silver", emoji: "🥈", subtitle: "Drills" },
+  gold: { label: "Gold", emoji: "🥇", subtitle: "Conversation" },
+};
+
+const LEGACY_MODE_MAP: Record<LegacyExerciseMode, ExerciseMode> = {
+  quick: "bronze",
+  standard: "silver",
+  deep: "gold",
+};
+
+export function normalizeExerciseMode(value: string | null | undefined): ExerciseMode | undefined {
+  if (value === "bronze" || value === "silver" || value === "gold") return value;
+  if (value === "quick" || value === "standard" || value === "deep") return LEGACY_MODE_MAP[value];
+  return undefined;
+}
 
 export type ExerciseSource =
   | "seed"
@@ -20,9 +42,9 @@ export type FlashcardDirection = "it_to_en" | "en_to_it";
 /** Which exercise types appear in each mode */
 /** Each tier has UNIQUE exercise types — no overlap between tiers */
 export const MODE_TYPES: Record<ExerciseMode, ExerciseType[]> = {
-  quick: ["srs"],
-  standard: ["cloze", "word_builder", "pattern_drill", "speed_translation", "error_hunt"],
-  deep: ["conversation", "reflection"],
+  bronze: ["srs"],
+  silver: ["cloze", "word_builder", "pattern_drill", "speed_translation", "error_hunt"],
+  gold: ["conversation", "reflection"],
 };
 
 // ── Exercise types ────────────────────────────────────────────────────

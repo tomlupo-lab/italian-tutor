@@ -33,8 +33,8 @@ export function modeAvailable(
   dueCards: number,
 ): boolean {
   const counts = inventory?.counts;
-  if (mode === "quick") return Math.max(counts?.quickReady ?? 0, dueCards) > 0;
-  if (mode === "standard") return (counts?.standardReady ?? 0) > 0;
+  if (mode === "bronze") return Math.max(counts?.quickReady ?? 0, dueCards) > 0;
+  if (mode === "silver") return (counts?.standardReady ?? 0) > 0;
   return (counts?.deepReady ?? 0) > 0;
 }
 
@@ -44,11 +44,11 @@ export function pickRunnableMode(
   dueCards: number,
 ): ExerciseMode | null {
   const fallbackOrder: ExerciseMode[] =
-    preferred === "deep"
-      ? ["deep", "standard", "quick"]
-      : preferred === "standard"
-        ? ["standard", "quick", "deep"]
-        : ["quick", "standard", "deep"];
+    preferred === "gold"
+      ? ["gold", "silver", "bronze"]
+      : preferred === "silver"
+        ? ["silver", "bronze", "gold"]
+        : ["bronze", "silver", "gold"];
 
   for (const mode of fallbackOrder) {
     if (modeAvailable(mode, inventory, dueCards)) return mode;

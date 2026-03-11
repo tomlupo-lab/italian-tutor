@@ -1,52 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import Link from "next/link";
 import { Loader2, Flame, Zap, BookOpen, TriangleAlert } from "lucide-react";
 import { getTodayWarsaw } from "../lib/date";
-import { useRouter } from "next/navigation";
 import Badge from "@/components/Badge";
 import { DashboardShell } from "@/components/layout/ScreenShell";
-import type { ExerciseMode } from "@/lib/exerciseTypes";
 import {
   inventoryToExerciseCounts,
-  pickRunnableMode,
   type InventoryStatusResult,
 } from "@/lib/inventoryStatus";
+import { withBasePath } from "@/lib/paths";
 import type {
   ActiveMissionResult,
   CatalogMission,
   LearnerMission,
 } from "@/lib/missionTypes";
 
-const MODE_LABEL: Record<ExerciseMode, string> = {
-  quick: "Bronze",
-  standard: "Silver",
-  deep: "Gold",
-};
-
-const MODE_COPY: Record<ExerciseMode, { subtitle: string; emoji: string }> = {
-  quick: { subtitle: "Card", emoji: "🥉" },
-  standard: { subtitle: "Drills", emoji: "🥈" },
-  deep: { subtitle: "Conversation", emoji: "🥇" },
-};
-
-const MODE_TARGET_KEY: Record<ExerciseMode, "bronzeReviews" | "silverDrills" | "goldConversations"> = {
-  quick: "bronzeReviews",
-  standard: "silverDrills",
-  deep: "goldConversations",
-};
-
-const MODE_CREDIT_KEY: Record<ExerciseMode, "bronze" | "silver" | "gold"> = {
-  quick: "bronze",
-  standard: "silver",
-  deep: "gold",
-};
-
 export default function Home() {
-  const router = useRouter();
   const today = getTodayWarsaw();
 
   const stats = useQuery(api.sessions.getStats);
@@ -86,10 +59,7 @@ export default function Home() {
 
   // Count exercises per type — include due SRS cards in Bronze count
   const dueCardsCount = dueCards?.length ?? 0;
-  const exerciseCounts = useMemo(
-    () => inventoryToExerciseCounts(inventoryStatus, dueCardsCount),
-    [inventoryStatus, dueCardsCount],
-  );
+  const exerciseCounts = inventoryToExerciseCounts(inventoryStatus, dueCardsCount);
 
   const hasDueCards = dueCardsCount > 0;
   const isFirstRun =
@@ -97,41 +67,26 @@ export default function Home() {
     stats.totalSessions === 0 &&
     (learnerProgress?.missions?.length ?? 0) === 0;
 
-  const activeProgress = useMemo(() => {
+  const activeProgress = (() => {
     const active = learnerProgress?.missions?.find((m) => m.active);
     if (!active) return null;
     const mission = catalog?.missions?.find((m) => m.missionId === active.missionId);
-    if (!mission) return { active, mission: null, recommendedMode: "standard" as ExerciseMode, blocker: false };
-    const bronzeMissing = mission.exerciseTargets.bronzeReviews - (active.credits?.bronze ?? 0);
-    const silverMissing = mission.exerciseTargets.silverDrills - (active.credits?.silver ?? 0);
-    const goldMissing = mission.exerciseTargets.goldConversations - (active.credits?.gold ?? 0);
-    const recommendedMode: ExerciseMode =
-      goldMissing > 0 ? "deep" : silverMissing > 0 ? "standard" : bronzeMissing > 0 ? "quick" : "standard";
+    if (!mission) return { active, mission: null, blocker: false };
     return {
       active,
       mission,
-      recommendedMode,
       blocker: (active.criticalErrorsCount ?? 0) > 0,
     };
-  }, [learnerProgress?.missions, catalog?.missions]);
+  })();
 
-  const missionStatus = useMemo(() => {
+  const missionStatus = (() => {
     if (!activeProgress) return "none" as const;
     if (activeProgress.blocker) return "blocked" as const;
     if (activeProgress.active.status === "completed") return "completed" as const;
     return "in_progress" as const;
-  }, [activeProgress]);
+  })();
 
-  const runnableRecommendedMode = useMemo(() => {
-    if (!activeProgress) return null;
-    return pickRunnableMode(
-      activeProgress.recommendedMode,
-      inventoryStatus,
-      dueCardsCount,
-    );
-  }, [activeProgress, inventoryStatus, dueCardsCount]);
-
-  const missionProgress = useMemo(() => {
+  const missionProgress = (() => {
     if (!activeProgress?.mission) return null;
     const bronzeTarget = activeProgress.mission.exerciseTargets.bronzeReviews || 0;
     const silverTarget = activeProgress.mission.exerciseTargets.silverDrills || 0;
@@ -155,26 +110,7 @@ export default function Home() {
     return {
       percent,
     };
-  }, [activeProgress]);
-
-  const modeProgress = useMemo(() => {
-    if (!activeProgress?.mission) return null;
-
-    return (["quick", "standard", "deep"] as ExerciseMode[]).reduce((acc, mode) => {
-      const target = activeProgress.mission?.exerciseTargets[MODE_TARGET_KEY[mode]] ?? 0;
-      const done = activeProgress.active.credits?.[MODE_CREDIT_KEY[mode]] ?? 0;
-      acc[mode] = {
-        done,
-        target,
-        percent: target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0,
-      };
-      return acc;
-    }, {} as Record<ExerciseMode, { done: number; target: number; percent: number }>);
-  }, [activeProgress]);
-
-  const handleModeSelect = (mode: ExerciseMode) => {
-    router.push(`/session/${today}?mode=${mode}`);
-  };
+  })();
 
   // Loading state
   if (stats === undefined || (activeMission?.missionId && inventoryStatus === undefined)) {
@@ -219,14 +155,14 @@ export default function Home() {
         </p>
         {hasDueCards ? (
           <Link
-            href={`/session/${today}?mode=quick`}
+            href={`/session/${today}?mode=bronze`}
             className="px-6 py-3 bg-accent rounded-xl text-sm font-medium"
           >
             Start Bronze session ({dueCards?.length ?? 0} due)
           </Link>
         ) : (
           <Link
-            href="/progress"
+            href={withBasePath("/progress")}
             className="px-6 py-3 bg-card rounded-xl border border-white/10 text-sm"
           >
             View Progress
@@ -237,7 +173,7 @@ export default function Home() {
   }
 
   return (
-    <DashboardShell contentClassName="gap-5">
+    <DashboardShell contentClassName="gap-7">
       <div className="rounded-2xl border border-white/10 bg-card/70 px-4 py-2.5">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
@@ -254,111 +190,9 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="text-center pt-1">
-        <p className="text-xs text-white/30">{today}</p>
-      </div>
-
-      <div className="bg-card rounded-2xl border border-white/10 p-5 space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] text-accent-light uppercase tracking-wider">Mission</p>
-          {missionStatus === "blocked" ? (
-            <Badge tone="status" status="blocked">Blocked</Badge>
-          ) : missionStatus === "completed" ? (
-            <Badge tone="status" status="completed">Completed</Badge>
-          ) : activeProgress?.mission?.level ? (
-            <Badge
-              tone="level"
-              level={activeProgress.mission.displayLevel ?? activeProgress.mission.level}
-            >
-              {activeProgress.mission.displayLevel ?? activeProgress.mission.level}
-            </Badge>
-          ) : (
-            <Badge>None</Badge>
-          )}
-        </div>
-        <h2 className="text-base font-semibold">
-          {activeProgress?.mission?.title ?? "No active mission selected"}
-        </h2>
-        <p className="text-sm text-white/55">
-          {activeMission?.summary ??
-            "Marco continuously adapts drills and conversations from your errors, score trends, and current mission goals."}
-        </p>
-        {activeProgress?.mission ? (
-          <>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-[11px] text-white/40">
-                <span>Mission progress</span>
-                <span>{missionProgress?.percent ?? 0}%</span>
-              </div>
-              <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-accent transition-all duration-500"
-                  style={{ width: `${missionProgress?.percent ?? 0}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5 pt-1">
-            {(["quick", "standard", "deep"] as ExerciseMode[]).map((mode) => {
-                const unavailable = !activeProgress.mission;
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => handleModeSelect(mode)}
-                    disabled={unavailable || generating}
-                    className={`w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left transition ${
-                      unavailable || generating ? "opacity-50 cursor-not-allowed" : "hover:bg-white/[0.06]"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">{MODE_COPY[mode].emoji}</span>
-                          <p className="text-[13px] font-semibold">{MODE_LABEL[mode]}</p>
-                          <p className="text-[10px] text-white/40">{MODE_COPY[mode].subtitle}</p>
-                        </div>
-                      </div>
-                    <div className="flex items-center gap-2 text-right" />
-                    </div>
-                    <div className="mt-1.5 space-y-1">
-                      <div className="flex items-center justify-between text-[10px] text-white/35">
-                        <span className="uppercase tracking-wide">Mission progress</span>
-                        <span>{modeProgress?.[mode].percent ?? 0}%</span>
-                      </div>
-                      <div className="h-1 rounded-full bg-white/5 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-accent transition-all duration-500"
-                          style={{ width: `${modeProgress?.[mode].percent ?? 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  </button>
-                );
-            })}
-            </div>
-
-            <p className="text-[11px] text-white/40">
-              Choose a session level to move the mission forward. Once a level reaches 100%, you can still replay it for
-              practice, but it will not add more mission progress.
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="text-sm font-semibold">Open Missions to start your campaign</p>
-            <Link
-              href="/missions"
-              className="inline-block px-4 py-2 rounded-xl text-sm font-medium bg-accent/20 text-accent-light border border-accent/30"
-            >
-              Open Mission Hub
-            </Link>
-          </>
-        )}
-      </div>
-
-      <div className="space-y-2">
+      <div className="space-y-4">
         <Link
-          href="/practice"
+          href={withBasePath("/practice")}
           className="block rounded-2xl border border-accent/20 bg-accent/10 px-4 py-4 text-left transition hover:bg-accent/15"
         >
           <div className="flex items-center gap-2">
@@ -369,9 +203,9 @@ export default function Home() {
             {dueCardsCount > 0 ? `${dueCardsCount} due card${dueCardsCount === 1 ? "" : "s"}` : "All cards with filters and modes"}
           </p>
         </Link>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Link
-            href="/exercises?focus=recovery"
+            href={withBasePath("/drills?focus=recovery")}
             className="rounded-2xl border border-white/10 bg-card px-3 py-4 text-left transition hover:bg-white/[0.03]"
           >
             <div className="flex items-center gap-2">
@@ -383,7 +217,7 @@ export default function Home() {
             </p>
           </Link>
           <Link
-            href="/exercises"
+            href={withBasePath("/skills")}
             className="rounded-2xl border border-white/10 bg-card px-3 py-4 text-left transition hover:bg-white/[0.03]"
           >
             <div className="flex items-center gap-2">
@@ -394,19 +228,54 @@ export default function Home() {
               Train with drills
             </p>
           </Link>
-          <Link
-            href="/missions"
-            className="rounded-2xl border border-white/10 bg-card px-3 py-4 text-left transition hover:bg-white/[0.03]"
-          >
-            <div className="flex items-center gap-2">
-              <Flame size={16} className="text-white/70" />
-              <p className="text-sm font-semibold">Continue mission</p>
-            </div>
-            <p className="mt-1 text-[11px] text-white/45">
-              Open current mission
-            </p>
-          </Link>
         </div>
+
+        <Link
+          href={withBasePath("/missions/current")}
+          className="block rounded-2xl border border-white/10 bg-card px-4 py-5 transition hover:bg-white/[0.03]"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-[11px] uppercase tracking-wider text-accent-light">Current mission</p>
+              <h2 className="text-sm font-semibold">
+                {activeProgress?.mission?.title ?? "No active mission selected"}
+              </h2>
+              <p className="text-[11px] text-white/45">
+                {activeProgress?.mission
+                  ? `${activeProgress.mission.displayLevel ?? activeProgress.mission.level} • ${missionProgress?.percent ?? 0}% complete`
+                  : "Open Missions to start your campaign"}
+              </p>
+            </div>
+            {missionStatus === "blocked" ? (
+              <Badge tone="status" status="blocked">Blocked</Badge>
+            ) : missionStatus === "completed" ? (
+              <Badge tone="status" status="completed">Completed</Badge>
+            ) : activeProgress?.mission?.level ? (
+              <Badge
+                tone="level"
+                level={activeProgress.mission.displayLevel ?? activeProgress.mission.level}
+              >
+                {activeProgress.mission.displayLevel ?? activeProgress.mission.level}
+              </Badge>
+            ) : (
+              <Badge>None</Badge>
+            )}
+          </div>
+          {activeProgress?.mission ? (
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center justify-between text-[11px] text-white/40">
+                <span>Mission progress</span>
+                <span>{missionProgress?.percent ?? 0}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/5">
+                <div
+                  className="h-full rounded-full bg-accent transition-all duration-500"
+                  style={{ width: `${missionProgress?.percent ?? 0}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
+        </Link>
       </div>
     </DashboardShell>
   );

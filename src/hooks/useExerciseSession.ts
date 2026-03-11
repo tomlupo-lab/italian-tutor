@@ -571,7 +571,7 @@ export function useExerciseSession({
             allResults,
           );
           const goldContract =
-            mode === "deep"
+            mode === "gold"
               ? evaluateGoldContract(sessionExercises, allResults)
               : null;
           const goldContractStatus = goldContract?.contractStatus as

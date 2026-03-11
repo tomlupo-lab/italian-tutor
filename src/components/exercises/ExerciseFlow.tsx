@@ -11,6 +11,7 @@ import SessionSummary from "../SessionSummary";
 import { prettySkillLabel } from "@/lib/labels";
 import Badge from "../Badge";
 import StudyProgressHeader from "../StudyProgressHeader";
+import { withBasePath } from "@/lib/paths";
 
 interface ExerciseFlowProps {
   exercises: Exercise[];
@@ -18,18 +19,12 @@ interface ExerciseFlowProps {
   date: string;
 }
 
-const NEXT_MODE_COPY: Record<ExerciseMode, string> = {
-  quick: "Start next Bronze session",
-  standard: "Start next Silver session",
-  deep: "Start next Gold session",
-};
-
 export default function ExerciseFlow({
   exercises,
   mode,
   date,
 }: ExerciseFlowProps) {
-  const isQuickMode = mode === "quick";
+  const isQuickMode = mode === "bronze";
   const {
     current,
     total,
@@ -63,7 +58,7 @@ export default function ExerciseFlow({
     const accuracy = totalItems > 0 ? correctItems / totalItems : 0;
     const completedAll = results.size >= total && total > 0;
 
-    if (mode === "standard") {
+    if (mode === "silver") {
       return {
         headline: "Marco Contract: Clean Structured Execution",
         rules: [
@@ -77,7 +72,7 @@ export default function ExerciseFlow({
       };
     }
 
-    if (mode === "deep") {
+    if (mode === "gold") {
       const convEx = exercises.find((ex) => ex.type === "conversation");
       const convResult = convEx ? results.get(convEx._id) : null;
       const userTurns = convResult && "messages" in convResult
@@ -146,7 +141,7 @@ export default function ExerciseFlow({
             <XCircle size={48} className="text-danger" />
             <p className="text-danger text-sm">{error}</p>
             <Link
-              href="/"
+              href={withBasePath("/")}
               className="px-6 py-3 bg-card rounded-xl border border-white/10 text-sm"
             >
               Back to Home
@@ -210,18 +205,28 @@ export default function ExerciseFlow({
               </div>
             )}
 
-            <Link
-              href={`/session/${date}?mode=${mode}`}
-              className="px-6 py-3 bg-accent rounded-xl text-sm font-medium"
-            >
-              {NEXT_MODE_COPY[mode]}
-            </Link>
-            <Link
-              href="/"
-              className="px-6 py-3 bg-card rounded-xl border border-white/10 text-sm font-medium"
-            >
-              Back to Home
-            </Link>
+            <div className="w-full flex flex-col gap-3">
+              <Link
+                href={withBasePath("/missions/current")}
+                className="w-full px-6 py-3 bg-accent rounded-xl text-sm font-medium text-center"
+              >
+                Continue mission
+              </Link>
+              {sessionErrors.length > 0 && (
+                <Link
+                  href={withBasePath("/drills?focus=recovery")}
+                  className="w-full px-6 py-3 bg-warn/15 text-warn rounded-xl border border-warn/30 text-sm font-medium text-center"
+                >
+                  Practice mistakes
+                </Link>
+              )}
+              <Link
+                href={withBasePath("/")}
+                className="w-full px-6 py-3 bg-card rounded-xl border border-white/10 text-sm font-medium text-center"
+              >
+                Back home
+              </Link>
+            </div>
           </>
         )}
       </div>
@@ -234,7 +239,7 @@ export default function ExerciseFlow({
       <div className="max-w-xl mx-auto px-4 py-8 text-center">
         <p className="text-white/50">No exercises available</p>
         <Link
-          href="/"
+          href={withBasePath("/")}
           className="mt-4 inline-block px-4 py-2 bg-card rounded-xl border border-white/10 text-sm"
         >
           Back to Home

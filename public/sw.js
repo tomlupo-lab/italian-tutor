@@ -1,4 +1,4 @@
-const CACHE_NAME = "marco-v14";
+const CACHE_NAME = "marco-v15";
 const TTS_CACHE = "marco-tts-v1";
 const BASE_PATH = "/tutor";
 
@@ -6,7 +6,7 @@ const BASE_PATH = "/tutor";
 const PRECACHE_URLS = [
   `${BASE_PATH}/`,
   `${BASE_PATH}/practice`,
-  `${BASE_PATH}/exercises`,
+  `${BASE_PATH}/drills`,
   `${BASE_PATH}/calendar`,
   `${BASE_PATH}/progress`,
   `${BASE_PATH}/offline`,

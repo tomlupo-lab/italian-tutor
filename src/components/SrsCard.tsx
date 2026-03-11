@@ -19,11 +19,15 @@ const DEFAULT_BUTTONS: RatingButton[] = [
 ];
 
 export interface SrsCardData {
+  id?: string;
   front: string;
   back: string;
   example?: string;
   tag?: string;
   level?: string;
+  it?: string;
+  en?: string;
+  ex?: string;
 }
 
 interface Props {
@@ -52,10 +56,10 @@ export default function SrsCard({
   const submitTimerRef = useRef<number | null>(null);
 
   const vocabCard: VocabCard = {
-    id: card.front,
-    it: card.front,
-    en: card.back,
-    ex: card.example || card.front,
+    id: card.id ?? card.front ?? card.it ?? "",
+    it: card.front ?? card.it ?? "",
+    en: card.back ?? card.en ?? "",
+    ex: card.example ?? card.ex ?? card.front ?? card.it ?? "",
     tag: card.tag,
     level: card.level as VocabCard["level"] | undefined,
   };

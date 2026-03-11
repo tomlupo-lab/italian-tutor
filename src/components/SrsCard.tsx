@@ -24,6 +24,8 @@ export interface SrsCardData {
   front: string;
   back: string;
   example?: string;
+  speakText?: string;
+  exampleSpeakText?: string;
   tag?: string;
   level?: string;
   it?: string;
@@ -61,6 +63,8 @@ export default function SrsCard({
     it: card.front ?? card.it ?? "",
     en: card.back ?? card.en ?? "",
     ex: card.example ?? card.ex ?? card.front ?? card.it ?? "",
+    speakText: "speakText" in card ? (card as VocabCard).speakText : undefined,
+    exampleSpeakText: "exampleSpeakText" in card ? (card as VocabCard).exampleSpeakText : undefined,
     tag: card.tag,
     level: card.level as VocabCard["level"] | undefined,
   };

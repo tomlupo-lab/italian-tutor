@@ -45,18 +45,18 @@ function authoredCountForType(entries: GeneratedRow[], type: string) {
 // ── Vocab banks by tag ──────────────────────────────────────────────
 const TAG_VOCAB: Record<string, Array<{ it: string; en: string; example?: string }>> = {
   home: [
-    { it: "l'appartamento", en: "the apartment" },
-    { it: "l'affitto", en: "the rent" },
-    { it: "il contratto", en: "the contract" },
-    { it: "il proprietario", en: "the landlord" },
-    { it: "la stanza", en: "the room" },
-    { it: "il bagno", en: "the bathroom" },
-    { it: "la cucina", en: "the kitchen" },
-    { it: "il soggiorno", en: "the living room" },
-    { it: "le spese", en: "the expenses/bills" },
-    { it: "il deposito", en: "the deposit" },
-    { it: "il quartiere", en: "the neighborhood" },
-    { it: "il piano", en: "the floor/story" },
+    { it: "l'appartamento", en: "the apartment", example: "L'appartamento e vicino alla metro." },
+    { it: "l'affitto", en: "the rent", example: "Quanto costa l'affitto al mese?" },
+    { it: "il contratto", en: "the contract", example: "Il contratto dura dodici mesi." },
+    { it: "il proprietario", en: "the landlord", example: "Il proprietario arriva tra poco." },
+    { it: "la stanza", en: "the room", example: "La stanza e luminosa e silenziosa." },
+    { it: "il bagno", en: "the bathroom", example: "Il bagno e privato o condiviso?" },
+    { it: "la cucina", en: "the kitchen", example: "La cucina e condivisa con un altro inquilino." },
+    { it: "il soggiorno", en: "the living room", example: "Il soggiorno e gia arredato." },
+    { it: "le spese", en: "the extra monthly costs", example: "Le spese mensili sono incluse?" },
+    { it: "il deposito cauzionale", en: "the security deposit", example: "Il deposito cauzionale e di due mensilita." },
+    { it: "il quartiere", en: "the neighborhood", example: "Il quartiere e tranquillo la sera." },
+    { it: "il piano", en: "the floor of a building", example: "L'appartamento e al terzo piano." },
   ],
   food: [
     { it: "il menù", en: "the menu" },
@@ -428,18 +428,10 @@ export const generateExercises = mutation({
   args: {
     date: v.optional(v.string()),
     missionId: v.optional(v.string()),
+    replaceExisting: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const date = args.date ?? warsawToday();
-
-    // Don't overwrite existing exercises
-    const existing = await ctx.db
-      .query("exercises")
-      .withIndex("by_date", (q) => q.eq("date", date))
-      .collect();
-    if (existing.length > 0) {
-      return { generated: 0, message: "Exercises already exist for this date" };
-    }
 
     // Resolve active mission
     let missionId = args.missionId;
@@ -454,6 +446,20 @@ export const generateExercises = mutation({
     }
     if (!missionId) {
       return { generated: 0, message: "No active mission" };
+    }
+
+    const existingForMissionDate = await ctx.db
+      .query("exercises")
+      .withIndex("by_date", (q) => q.eq("date", date))
+      .filter((q) => q.eq(q.field("missionId"), missionId))
+      .collect();
+
+    if (args.replaceExisting) {
+      for (const row of existingForMissionDate) {
+        await ctx.db.delete(row._id);
+      }
+    } else if (existingForMissionDate.length > 0) {
+      return { generated: 0, message: "Exercises already exist for this mission/date" };
     }
 
     const mission = MISSIONS.find((m) => m.missionId === missionId);

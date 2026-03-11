@@ -103,6 +103,8 @@ export const add = mutation({
     it: v.string(),
     en: v.string(),
     example: v.optional(v.string()),
+    prompt: v.optional(v.string()),
+    explanation: v.optional(v.string()),
     tag: v.optional(v.string()),
     level: v.optional(v.string()),
     source: v.union(
@@ -137,6 +139,8 @@ export const bulkAdd = mutation({
         it: v.string(),
         en: v.string(),
         example: v.optional(v.string()),
+        prompt: v.optional(v.string()),
+        explanation: v.optional(v.string()),
         tag: v.optional(v.string()),
         level: v.optional(v.string()),
         source: v.union(
@@ -166,7 +170,18 @@ export const bulkAdd = mutation({
           )
         )
         .first();
-      if (existing) continue;
+      if (existing) {
+        await ctx.db.patch(existing._id, {
+          ...(card.example && !existing.example ? { example: card.example } : {}),
+          ...(card.prompt && !existing.prompt ? { prompt: card.prompt } : {}),
+          ...(card.explanation && !existing.explanation ? { explanation: card.explanation } : {}),
+          ...(card.tag && !existing.tag ? { tag: card.tag } : {}),
+          ...(card.level && !existing.level ? { level: card.level } : {}),
+          ...(card.errorCategory && !existing.errorCategory ? { errorCategory: card.errorCategory } : {}),
+          ...(card.skillId && !existing.skillId ? { skillId: card.skillId } : {}),
+        });
+        continue;
+      }
 
       await ctx.db.insert("cards", {
         ...card,
@@ -186,7 +201,7 @@ export const bulkAdd = mutation({
 export const updateExplanation = mutation({
   args: {
     it: v.string(),
-    en: v.string(),
+    explanation: v.string(),
   },
   handler: async (ctx, args) => {
     const direction = DEFAULT_DIRECTION;
@@ -197,7 +212,7 @@ export const updateExplanation = mutation({
       )
       .first();
     if (!card) return { updated: false };
-    await ctx.db.patch(card._id, { en: args.en });
+    await ctx.db.patch(card._id, { explanation: args.explanation });
     return { updated: true };
   },
 });
@@ -359,6 +374,9 @@ export const upsert = mutation({
   args: {
     it: v.string(),
     en: v.string(),
+    example: v.optional(v.string()),
+    prompt: v.optional(v.string()),
+    explanation: v.optional(v.string()),
     source: v.union(
       v.literal("seed"),
       v.literal("mission_topup"),
@@ -415,6 +433,9 @@ export const upsert = mutation({
         nextReview,
         lastQuality: q,
         lastReviewed: today,
+        ...(args.example && !existing.example ? { example: args.example } : {}),
+        ...(args.prompt && !existing.prompt ? { prompt: args.prompt } : {}),
+        ...(args.explanation && !existing.explanation ? { explanation: args.explanation } : {}),
         ...(args.tag && !existing.tag ? { tag: args.tag } : {}),
         ...(args.level && !existing.level ? { level: args.level } : {}),
       });
@@ -430,6 +451,9 @@ export const upsert = mutation({
       return await ctx.db.insert("cards", {
         it: args.it,
         en: args.en,
+        example: args.example,
+        prompt: args.prompt,
+        explanation: args.explanation,
         source: args.source,
         direction,
         tag: args.tag,

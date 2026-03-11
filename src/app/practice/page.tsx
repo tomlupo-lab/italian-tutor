@@ -35,6 +35,19 @@ const TIER_KEY = "italian-tutor-tier-scores";
 type ConvexCard = Record<string, any>;
 
 function toVocabCard(card: ConvexCard): VocabCard {
+  if (card.source === "recovery") {
+    const prompt = card.prompt || card.example || card.en;
+    return {
+      id: card._id,
+      it: prompt || card.it,
+      en: card.it,
+      ex: card.explanation || card.en || card.it,
+      speakText: card.it,
+      exampleSpeakText: card.it,
+      tag: card.tag || card.errorCategory,
+      level: card.level,
+    };
+  }
   return {
     id: card._id,
     it: card.it,

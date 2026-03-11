@@ -1,6 +1,12 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { MISSION_EXERCISE_LIBRARY } from "./missionExerciseLibraryData";
+import {
+  A1_AUDIT_EXPANSION,
+  MISSION_TOPUP_PATCHES,
+  SEED_CARD_INSERTS,
+  SEED_CARD_PATCHES,
+} from "./cardRemediation";
 
 // All vocab data inline to avoid importing from src/
 const allVocab = [
@@ -325,9 +331,12 @@ export const seedCurriculum = mutation({
         .filter((q) => q.eq(q.field("it"), card.it))
         .first();
       if (existing) {
-        if (!existing.level && card.level) {
-          await ctx.db.patch(existing._id, { level: card.level });
-        }
+        await ctx.db.patch(existing._id, {
+          ...(card.en && card.en !== existing.en ? { en: card.en } : {}),
+          ...(card.example && card.example !== existing.example ? { example: card.example } : {}),
+          ...(card.tag && card.tag !== existing.tag ? { tag: card.tag } : {}),
+          ...(card.level && card.level !== existing.level ? { level: card.level } : {}),
+        });
         skipped++;
         continue;
       }
@@ -349,6 +358,135 @@ export const seedCurriculum = mutation({
     }
 
     return { added, skipped };
+  },
+});
+
+export const repairMissionTopupCards = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const cards = await ctx.db.query("cards").collect();
+    let updated = 0;
+
+    for (const card of cards) {
+      if (card.source !== "mission_topup") continue;
+      const patch = MISSION_TOPUP_PATCHES[card.it];
+      if (!patch) continue;
+      await ctx.db.patch(card._id, {
+        ...(patch.it ? { it: patch.it } : {}),
+        ...(patch.en ? { en: patch.en } : {}),
+        ...(patch.example ? { example: patch.example } : {}),
+        ...(patch.tag ? { tag: patch.tag } : {}),
+        ...(patch.level ? { level: patch.level } : {}),
+      });
+      updated += 1;
+    }
+
+    return { updated };
+  },
+});
+
+export const repairSeedCards = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const cards = await ctx.db.query("cards").collect();
+    let patched = 0;
+    let inserted = 0;
+    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
+
+    for (const patch of SEED_CARD_PATCHES) {
+      const matches = cards.filter((card) => card.source === "seed" && card.it === patch.matchIt);
+      for (const card of matches) {
+        await ctx.db.patch(card._id, patch.changes);
+        patched += 1;
+      }
+    }
+
+    for (const card of [...SEED_CARD_INSERTS, ...A1_AUDIT_EXPANSION]) {
+      const existing = await ctx.db
+        .query("cards")
+        .withIndex("by_it_direction", (q) =>
+          q.and(q.eq("it", card.it), q.eq("direction", "it_to_en"))
+        )
+        .first();
+      if (existing) continue;
+
+      await ctx.db.insert("cards", {
+        ...card,
+        source: "seed" as const,
+        ease: 2.5,
+        interval: 0,
+        repetitions: 0,
+        nextReview: today,
+        direction: "it_to_en",
+      });
+      inserted += 1;
+
+      const reverseExisting = await ctx.db
+        .query("cards")
+        .withIndex("by_it_direction", (q) =>
+          q.and(q.eq("it", card.it), q.eq("direction", "en_to_it"))
+        )
+        .first();
+      if (reverseExisting) continue;
+
+      await ctx.db.insert("cards", {
+        ...card,
+        source: "seed" as const,
+        ease: 2.5,
+        interval: 0,
+        repetitions: 0,
+        nextReview: today,
+        direction: "en_to_it",
+      });
+      inserted += 1;
+    }
+
+    return { patched, inserted };
+  },
+});
+
+function inferRecoveryTag(it: string, example?: string) {
+  const sample = `${it} ${example ?? ""}`.toLowerCase();
+  if (sample.includes("stazione") || sample.includes("binario") || sample.includes("treno")) {
+    return "travel";
+  }
+  if (sample.includes("stanza") || sample.includes("appartamento") || sample.includes("affitto")) {
+    return "home";
+  }
+  if (sample.includes("riunione") || sample.includes("documento") || sample.includes("pratica")) {
+    return "work";
+  }
+  return "recovery";
+}
+
+function inferRecoveryLevel(text: string) {
+  return text.length > 55 ? "A2" : "A1";
+}
+
+export const repairRecoveryCards = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const cards = await ctx.db.query("cards").collect();
+    let updated = 0;
+
+    for (const card of cards) {
+      if (card.source !== "recovery") continue;
+      const prompt = card.prompt ?? card.example ?? card.en;
+      const explanation = card.explanation ?? card.en;
+      await ctx.db.patch(card._id, {
+        prompt,
+        explanation,
+        tag: card.tag ?? inferRecoveryTag(card.it, card.example),
+        level: card.level ?? inferRecoveryLevel(card.it),
+        en:
+          card.errorCategory === "translation"
+            ? card.en
+            : "Say the corrected sentence in Italian.",
+      });
+      updated += 1;
+    }
+
+    return { updated };
   },
 });
 

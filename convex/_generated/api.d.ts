@@ -9,6 +9,7 @@
  */
 
 import type * as backfillMissingDirections from "../backfillMissingDirections.js";
+import type * as cardRemediation from "../cardRemediation.js";
 import type * as cards from "../cards.js";
 import type * as exerciseGenerator from "../exerciseGenerator.js";
 import type * as exercises from "../exercises.js";
@@ -26,6 +27,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   backfillMissingDirections: typeof backfillMissingDirections;
+  cardRemediation: typeof cardRemediation;
   cards: typeof cards;
   exerciseGenerator: typeof exerciseGenerator;
   exercises: typeof exercises;

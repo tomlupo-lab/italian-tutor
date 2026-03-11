@@ -121,6 +121,8 @@ export default defineSchema({
     it: v.string(),
     en: v.string(),
     example: v.optional(v.string()),
+    prompt: v.optional(v.string()),
+    explanation: v.optional(v.string()),
     tag: v.optional(v.string()),
     level: v.optional(v.string()),
     source: v.union(

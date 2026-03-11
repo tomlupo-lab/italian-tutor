@@ -5,6 +5,8 @@ export interface VocabCard {
   it: string;
   en: string;
   ex: string;
+  speakText?: string;
+  exampleSpeakText?: string;
   tag?: string;
   level?: "A1" | "A2" | "B1" | "B2";
 }

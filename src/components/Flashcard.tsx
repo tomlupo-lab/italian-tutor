@@ -38,17 +38,17 @@ export default function Flashcard({
   const handleSpeak = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      speakItalian(card.it, speechRate);
+      speakItalian(card.speakText ?? card.it, speechRate);
     },
-    [card.it, speechRate],
+    [card.it, card.speakText, speechRate],
   );
 
   const handleSpeakExample = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      speakItalian(card.ex, speechRate);
+      speakItalian(card.exampleSpeakText ?? card.ex, speechRate);
     },
-    [card.ex, speechRate],
+    [card.ex, card.exampleSpeakText, speechRate],
   );
 
   const levelBadge = card.level ? (

@@ -4,13 +4,13 @@ import { MISSIONS } from "./progressionCatalog";
 const TAG_VOCAB = {
   home: [
     ["l'affitto", "the rent", "Quanto costa l'affitto al mese?"],
-    ["il deposito", "the deposit", "Il deposito è di due mesi."],
-    ["le spese", "the utilities / extra bills", "Le spese sono incluse o no?"],
+    ["il deposito cauzionale", "the security deposit", "Il deposito cauzionale è di due mensilità."],
+    ["le spese", "the extra monthly costs", "Le spese mensili sono incluse o no?"],
     ["il contratto", "the contract", "Il contratto inizia a maggio."],
     ["la stanza", "the room", "La stanza è piccola ma luminosa."],
     ["il quartiere", "the neighborhood", "Il quartiere è tranquillo la sera."],
     ["l'appartamento", "the apartment", "L'appartamento è vicino alla metro."],
-    ["la visita", "the viewing", "Possiamo fare una visita domani?"],
+    ["la visita", "the apartment viewing", "Possiamo fissare una visita domani?"],
     ["la cucina", "the kitchen", "La cucina è condivisa."],
     ["il bagno", "the bathroom", "Il bagno è privato?"],
     ["il proprietario", "the landlord", "Il proprietario vive in città."],
@@ -18,7 +18,7 @@ const TAG_VOCAB = {
   ],
   housing: [
     ["il trasloco", "the move", "Il trasloco è previsto per lunedì."],
-    ["la data di ingresso", "the move-in date", "Qual è la data di ingresso?"],
+    ["la data di disponibilità", "the move-in date", "Qual è la data di disponibilità?"],
     ["l'agenzia", "the agency", "L'agenzia chiede una commissione."],
     ["l'annuncio", "the listing", "Ho visto il suo annuncio online."],
   ],
@@ -200,8 +200,8 @@ const CLOZE_BY_FOCUS = {
     ["Vorrei ___ il prezzo finale.", ["sapere", "parlare", "uscire", "aprire"], 0, "you want to know the final price"],
   ],
   lexical_choice: [
-    ["Il quartiere è molto ___.", ["tranquillo", "urgente", "salata", "chiuso"], 0, "describe a neighborhood"],
-    ["La proposta mi sembra ___.", ["ragionevole", "ritardo", "binario", "allergica"], 0, "describe a proposal"],
+    ["La spiegazione è molto ___.", ["chiara", "urgente", "salata", "chiuso"], 0, "describe an explanation naturally"],
+    ["Questa scelta mi sembra ___.", ["ragionevole", "ritardo", "binario", "allergica"], 0, "describe a choice or option"],
   ],
   agreement: [
     ["Le spese sono ___ nel prezzo.", ["incluse", "inclusi", "inclusa", "incluso"], 0, "feminine plural agreement"],
@@ -209,7 +209,7 @@ const CLOZE_BY_FOCUS = {
   ],
   word_order: [
     ["Domani ___ il contratto insieme.", ["firmiamo", "firmo", "firmano", "firmi"], 0, "noi form"],
-    ["Stasera ___ il punto sul progetto.", ["facciamo", "faccio", "fanno", "fai"], 0, "noi form"],
+    ["Adesso ___ un riepilogo finale.", ["facciamo", "faccio", "fanno", "fai"], 0, "noi form"],
   ],
   verb_tense: [
     ["Ieri ___ la tua mail.", ["ho letto", "leggo", "leggerò", "leggevo"], 0, "completed past event"],
@@ -248,7 +248,7 @@ const WORD_BUILDERS_BY_TAG = {
     ["Quando posso visitare l'appartamento", "When can I visit the apartment"],
   ],
   food: [
-    ["Vorrei ordinare un tavolo per due", "I would like to arrange a table for two"],
+    ["Vorrei un tavolo per due", "I would like a table for two"],
     ["Possiamo dividere il conto alla fine", "Can we split the bill at the end"],
     ["Il mio ospite è vegetariano stasera", "My guest is vegetarian tonight"],
   ],
@@ -298,6 +298,12 @@ const WORD_BUILDERS_BY_TAG = {
     ["L'utente vuole un flusso più semplice", "The user wants a simpler flow"],
   ],
 };
+
+const GENERAL_WORD_BUILDERS = [
+  ["Può ripetere l'ultima informazione", "Can you repeat the last piece of information"],
+  ["Vorrei confermare i dettagli principali", "I would like to confirm the main details"],
+  ["Grazie, adesso è tutto chiaro", "Thank you, now everything is clear"],
+];
 
 const PATTERN_DRILLS_BY_FOCUS = {
   preposition: {
@@ -376,9 +382,9 @@ const PATTERN_DRILLS_BY_FOCUS = {
     name: "Precise lexical choice",
     description: "Choose the most natural mission phrase for the situation.",
     sentences: [
-      ["Per descrivere il quartiere dico che è ___.", "___", "tranquillo", "natural description"],
-      ["Quando negozio il prezzo propongo un ___.", "___", "compromesso", "negotiation vocabulary"],
-      ["Durante una call difficile cerco una ___ chiara.", "___", "soluzione", "problem-solving noun"],
+      ["Per descrivere una risposta dico che è ___.", "___", "chiara", "natural description"],
+      ["Quando valuto un'opzione la trovo ___.", "___", "ragionevole", "natural evaluation"],
+      ["Durante uno scambio difficile cerco una ___ chiara.", "___", "soluzione", "problem-solving noun"],
     ],
   },
   pronunciation_prosody: {
@@ -420,7 +426,11 @@ const ERROR_HUNTS_BY_FOCUS = {
   ],
   incomplete_response: [
     ["Il treno parte alle nove.", "Il treno parte alle nove dal binario quattro.", "The answer is incomplete because it omits the platform."],
-    ["Sì, va bene.", "Sì, va bene: confermo il prezzo, le spese incluse e la data di ingresso.", "A closing answer should restate the key facts."],
+    ["Sì, va bene.", "Sì, va bene: confermo il prezzo, le spese incluse e la data di disponibilità.", "A closing answer should restate the key facts."],
+  ],
+  pragmatic_mismatch: [
+    ["Ciao signora, dimmi pure.", "Buongiorno signora, mi dica pure.", "A more respectful register fits this interaction."],
+    ["Ehi, mandami una conferma scritta.", "Potrebbe mandarmi una conferma scritta?", "A polite request is more appropriate here."],
   ],
   off_topic: [
     ["Mi piace molto Milano, comunque il rimborso...", "Per il rimborso mi serve il numero pratica e la data del pagamento.", "The answer should stay on the task."],
@@ -431,6 +441,11 @@ const ERROR_HUNTS_BY_FOCUS = {
     ["Non serve evitare alcolici con questo farmaco.", "Serve evitare alcolici con questo farmaco.", "The negation reverses the warning."],
   ],
 };
+
+const GENERAL_ERROR_HUNT_ROWS = [
+  ["Mi serve una informazione chiara.", "Mi serve un'informazione chiara.", "Use the elided form before a feminine noun beginning with a vowel."],
+  ["Grazie, mandami una conferma scritta.", "Grazie, potrebbe mandarmi una conferma scritta?", "A more polite request fits formal or semi-formal interactions."],
+];
 
 const SPEED_TRANSLATION_BY_TAG = {
   home: [
@@ -465,6 +480,11 @@ const SPEED_TRANSLATION_BY_TAG = {
     ["I want to repeat the key message clearly.", ["Voglio ripetere chiaramente il messaggio chiave.", "Voglio chiudere chiaramente il binario chiave.", "Voglio comprare il messaggio chiave.", "Voglio visitare il messaggio chiave."], 0],
   ],
 };
+
+const GENERAL_SPEED_TRANSLATIONS = [
+  ["Can you repeat the last detail?", ["Può ripetere l'ultimo dettaglio?", "Può chiudere l'ultimo dettaglio?", "Può cambiare l'ultimo dettaglio?", "Può portare l'ultimo dettaglio?"], 0],
+  ["I want to confirm the main details.", ["Voglio confermare i dettagli principali.", "Voglio comprare i dettagli principali.", "Voglio perdere i dettagli principali.", "Voglio dividere i dettagli principali."], 0],
+];
 
 const CONVERSATION_STYLES = {
   home: "You are practical and direct. Ask follow-up questions about cost, timing, and included items. Speak naturally in Italian.",
@@ -513,7 +533,7 @@ function pickWordBuilders(tags) {
   for (const tag of tags) {
     for (const row of WORD_BUILDERS_BY_TAG[tag] ?? []) combined.push({ tag, row });
   }
-  for (const row of WORD_BUILDERS_BY_TAG.work) combined.push({ tag: "general", row });
+  for (const row of GENERAL_WORD_BUILDERS) combined.push({ tag: "general", row });
   return uniqueBy(combined, (entry) => entry.row[0]);
 }
 
@@ -522,7 +542,7 @@ function pickSpeedTranslations(tags) {
   for (const tag of tags) {
     for (const row of SPEED_TRANSLATION_BY_TAG[tag] ?? []) combined.push({ tag, row });
   }
-  for (const row of SPEED_TRANSLATION_BY_TAG.work) combined.push({ tag: "general", row });
+  for (const row of GENERAL_SPEED_TRANSLATIONS) combined.push({ tag: "general", row });
   return uniqueBy(combined, (entry) => entry.row[0]);
 }
 
@@ -786,7 +806,7 @@ function buildMissionLibrary(mission) {
 
   const fallbackPattern = PATTERN_DRILLS_BY_FOCUS[focusFallback] ?? PATTERN_DRILLS_BY_FOCUS.verb_conjugation;
   const patternFallbackKeys = uniqueBy(
-    [...mission.errorFocus, "verb_conjugation", "preposition", "agreement", "incomplete_response", "off_topic"]
+    mission.errorFocus
       .filter((focus) => Boolean(PATTERN_DRILLS_BY_FOCUS[focus]))
       .map((focus) => ({ focus, row: PATTERN_DRILLS_BY_FOCUS[focus] })),
     (entry) => entry.focus
@@ -848,8 +868,9 @@ function buildMissionLibrary(mission) {
     });
   }
 
-  const fallbackError = (ERROR_HUNTS_BY_FOCUS[focusFallback] ?? ERROR_HUNTS_BY_FOCUS.preposition)[0];
+  const fallbackErrorRows = ERROR_HUNTS_BY_FOCUS[focusFallback] ?? GENERAL_ERROR_HUNT_ROWS;
   while (countType(entries, "error_hunt") < 4) {
+    const fallbackError = fallbackErrorRows[countType(entries, "error_hunt") % fallbackErrorRows.length];
     entries.push({
       missionId: mission.missionId,
       level: mission.level,
@@ -882,8 +903,9 @@ function buildMissionLibrary(mission) {
     });
   }
 
-  const fallbackTranslation = (SPEED_TRANSLATION_BY_TAG[primaryTag] ?? SPEED_TRANSLATION_BY_TAG.work)[0];
+  const fallbackTranslationRows = SPEED_TRANSLATION_BY_TAG[primaryTag] ?? GENERAL_SPEED_TRANSLATIONS;
   while (countType(entries, "speed_translation") < 4) {
+    const fallbackTranslation = fallbackTranslationRows[countType(entries, "speed_translation") % fallbackTranslationRows.length];
     entries.push({
       missionId: mission.missionId,
       level: mission.level,
@@ -905,7 +927,7 @@ function buildMissionLibrary(mission) {
   }
 
   while (countType(entries, "error_hunt") < 4) {
-    const fallback = (ERROR_HUNTS_BY_FOCUS.preposition)[countType(entries, "error_hunt") % ERROR_HUNTS_BY_FOCUS.preposition.length];
+    const fallback = GENERAL_ERROR_HUNT_ROWS[countType(entries, "error_hunt") % GENERAL_ERROR_HUNT_ROWS.length];
     entries.push({
       missionId: mission.missionId,
       level: mission.level,

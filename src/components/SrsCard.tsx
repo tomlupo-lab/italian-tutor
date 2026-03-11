@@ -71,13 +71,20 @@ export default function SrsCard({
   }, []);
 
   useEffect(() => {
-    speakItalian(vocabCard.it, speechRate);
+    if (mode !== "reverse") {
+      speakItalian(vocabCard.it, speechRate);
+    }
     return () => {
       if (submitTimerRef.current !== null) {
         window.clearTimeout(submitTimerRef.current);
       }
     };
-  }, [speechRate, vocabCard.it]);
+  }, [mode, speechRate, vocabCard.it]);
+
+  useEffect(() => {
+    if (!flipped || mode !== "reverse") return;
+    speakItalian(vocabCard.it, speechRate);
+  }, [flipped, mode, speechRate, vocabCard.it]);
 
   return (
     <div className="space-y-4 w-full">

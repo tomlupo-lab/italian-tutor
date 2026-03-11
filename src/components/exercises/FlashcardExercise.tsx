@@ -56,8 +56,15 @@ export default function FlashcardExercise({ content, onComplete }: Props) {
   };
 
   useEffect(() => {
+    if (cardMode !== "reverse") {
+      speakItalian(card.it, 0.85);
+    }
+  }, [card.it, cardMode]);
+
+  useEffect(() => {
+    if (!flipped || cardMode !== "reverse") return;
     speakItalian(card.it, 0.85);
-  }, [card.it]);
+  }, [flipped, card.it, cardMode]);
 
   const handleRate = useCallback(
     (quality: number) => {
@@ -98,22 +105,22 @@ export default function FlashcardExercise({ content, onComplete }: Props) {
         </button>
       </div>
       {flipped ? (
-        <div className="flex gap-3 justify-center">
+        <div className="grid grid-cols-3 gap-3">
           <button
             onClick={() => handleRate(0)}
-            className="px-5 py-3 rounded-xl bg-danger/20 border border-danger/30 hover:bg-danger/30 transition text-sm font-medium"
+            className="w-full px-5 py-3 rounded-xl bg-danger/20 border border-danger/30 hover:bg-danger/30 transition text-sm font-medium"
           >
             Again
           </button>
           <button
             onClick={() => handleRate(3)}
-            className="px-5 py-3 rounded-xl bg-warn/20 border border-warn/30 hover:bg-warn/30 transition text-sm font-medium"
+            className="w-full px-5 py-3 rounded-xl bg-warn/20 border border-warn/30 hover:bg-warn/30 transition text-sm font-medium"
           >
             Good
           </button>
           <button
             onClick={() => handleRate(5)}
-            className="px-5 py-3 rounded-xl bg-success/20 border border-success/30 hover:bg-success/30 transition text-sm font-medium"
+            className="w-full px-5 py-3 rounded-xl bg-success/20 border border-success/30 hover:bg-success/30 transition text-sm font-medium"
           >
             Easy
           </button>

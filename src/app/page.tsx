@@ -356,31 +356,57 @@ export default function Home() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="space-y-2">
         <Link
           href="/practice"
-          className="rounded-2xl border border-white/10 bg-card px-4 py-4 text-left transition hover:bg-white/[0.03]"
+          className="block rounded-2xl border border-accent/20 bg-accent/10 px-4 py-4 text-left transition hover:bg-accent/15"
         >
           <div className="flex items-center gap-2">
             <BookOpen size={16} className="text-accent-light" />
-            <p className="text-sm font-semibold">SRS Practice</p>
+            <p className="text-sm font-semibold">Review words</p>
           </div>
           <p className="mt-1 text-[11px] text-white/45">
             {dueCardsCount > 0 ? `${dueCardsCount} due card${dueCardsCount === 1 ? "" : "s"}` : "All cards with filters and modes"}
           </p>
         </Link>
-        <Link
-          href="/exercises?focus=recovery"
-          className="rounded-2xl border border-white/10 bg-card px-4 py-4 text-left transition hover:bg-white/[0.03]"
-        >
-          <div className="flex items-center gap-2">
-            <TriangleAlert size={16} className="text-warn" />
-            <p className="text-sm font-semibold">Error Drills</p>
-          </div>
-          <p className="mt-1 text-[11px] text-white/45">
-            Target recent mistakes with focused drills
-          </p>
-        </Link>
+        <div className="grid grid-cols-3 gap-2">
+          <Link
+            href="/exercises?focus=recovery"
+            className="rounded-2xl border border-white/10 bg-card px-3 py-4 text-left transition hover:bg-white/[0.03]"
+          >
+            <div className="flex items-center gap-2">
+              <TriangleAlert size={16} className="text-warn" />
+              <p className="text-sm font-semibold">Practice mistakes</p>
+            </div>
+            <p className="mt-1 text-[11px] text-white/45">
+              Fix recent weak spots
+            </p>
+          </Link>
+          <Link
+            href="/exercises"
+            className="rounded-2xl border border-white/10 bg-card px-3 py-4 text-left transition hover:bg-white/[0.03]"
+          >
+            <div className="flex items-center gap-2">
+              <Zap size={16} className="text-accent-light" />
+              <p className="text-sm font-semibold">Build skills</p>
+            </div>
+            <p className="mt-1 text-[11px] text-white/45">
+              Train with drills
+            </p>
+          </Link>
+          <Link
+            href="/missions"
+            className="rounded-2xl border border-white/10 bg-card px-3 py-4 text-left transition hover:bg-white/[0.03]"
+          >
+            <div className="flex items-center gap-2">
+              <Flame size={16} className="text-white/70" />
+              <p className="text-sm font-semibold">Continue mission</p>
+            </div>
+            <p className="mt-1 text-[11px] text-white/45">
+              Open current mission
+            </p>
+          </Link>
+        </div>
       </div>
     </DashboardShell>
   );

@@ -405,7 +405,7 @@ export const repairSeedCards = mutation({
       const existing = await ctx.db
         .query("cards")
         .withIndex("by_it_direction", (q) =>
-          q.and(q.eq("it", card.it), q.eq("direction", "it_to_en"))
+          q.eq("it", card.it).eq("direction", "it_to_en")
         )
         .first();
       if (existing) continue;
@@ -424,7 +424,7 @@ export const repairSeedCards = mutation({
       const reverseExisting = await ctx.db
         .query("cards")
         .withIndex("by_it_direction", (q) =>
-          q.and(q.eq("it", card.it), q.eq("direction", "en_to_it"))
+          q.eq("it", card.it).eq("direction", "en_to_it")
         )
         .first();
       if (reverseExisting) continue;

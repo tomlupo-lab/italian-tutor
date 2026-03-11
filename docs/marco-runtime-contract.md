@@ -96,10 +96,12 @@ Expected output:
 
 Current migration note:
 
-- legacy card source values may still exist in persisted data during compatibility transition:
-  - `builtin`
-  - `lesson`
-  - `correction`
+- legacy card source values have been migrated out of persisted data
+- canonical card source values are now:
+  - `seed`
+  - `mission_topup`
+  - `recovery`
+  - `manual`
 
 ### 4. Daily Maintenance
 
@@ -249,7 +251,7 @@ Notes:
 
 - exercise inventory is already mission-aware
 - recovery flow is already event/state-driven
-- card source migration is in progress; runtime writes should prefer the newer source labels
+- card source migration has been completed; runtime writes now use only the newer source labels
 
 ## Operational Rule
 

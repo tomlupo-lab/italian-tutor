@@ -488,11 +488,12 @@ The app currently uses mission-scoped inventory readiness on Home, Session, and 
 
 The broader `api.exercises.getInventoryStatus` query exists as a general inventory/readiness primitive, but it is not the main app read for those screens today.
 
-Exercise source labels have largely moved to the newer model for generated content. Card source labels are still partially legacy and currently remain:
+Exercise and card source labels now use the newer model consistently:
 
-- `builtin`
-- `lesson`
-- `correction`
+- `seed`
+- `mission_topup`
+- `recovery`
+- `manual`
 - `manual`
 
 Note: there is no standalone "Marco skill" file in the current Codex skill registry for this repo. This document is the maintained source for Marco/app alignment until a dedicated skill is added. Runtime event/job details now live alongside it in `docs/marco-runtime-contract.md`.
@@ -646,9 +647,9 @@ Cards are stored separately from generated mission exercises.
 
 Current card source values:
 
-- `builtin`
-- `lesson`
-- `correction`
+- `seed`
+- `mission_topup`
+- `recovery`
 - `manual`
 
 Current direction support:
@@ -658,7 +659,7 @@ Current direction support:
 
 Important note:
 
-- card source names have not yet been fully migrated to the newer exercise-source taxonomy
+- card and exercise source naming now align on the same newer vocabulary
 
 ### Exercises
 
@@ -807,14 +808,12 @@ Important product interpretation:
 
 These gaps still exist between the desired target architecture and the current code:
 
-1. Card source labels still use legacy values such as `lesson` and `builtin`
-2. `/drills` still hosts multiple learner intents in one implementation surface
-3. Build Skills still launches through the drills runtime rather than a fully distinct skill-runtime surface
-4. Marco/app sync is still documented conceptually here rather than implemented as a formal standalone integration contract
+1. `/drills` still hosts multiple learner intents in one implementation surface
+2. Build Skills still launches through the drills runtime rather than a fully distinct skill-runtime surface
+3. Marco/app sync is still documented conceptually here rather than implemented as a formal standalone integration contract
 
 ## Recommended Next Technical Steps
 
-1. Finish migrating card source labels to the newer content-ingestion vocabulary
-2. Separate recovery drills from generic drills more cleanly at the route/runtime level if needed
-3. Formalize the app -> Marco and Marco -> app payload contract in code or typed schema
-4. Add a dedicated operational doc for generation jobs if Marco orchestration expands further
+1. Separate recovery drills from generic drills more cleanly at the route/runtime level if needed
+2. Formalize the app -> Marco and Marco -> app payload contract in code or typed schema
+3. Add a dedicated operational doc for generation jobs if Marco orchestration expands further

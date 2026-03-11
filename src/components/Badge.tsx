@@ -18,7 +18,7 @@ interface BadgeProps {
   tone?: BadgeTone;
   level?: string;
   status?: "blocked" | "completed" | "active";
-  source?: "recovery" | "correction";
+  source?: "recovery";
   className?: string;
 }
 
@@ -47,7 +47,7 @@ function resolveTone({
   if (tone === "status" && status) {
     return STATUS_CLASS[status] || "bg-white/5 text-white/40 border-white/10";
   }
-  if (tone === "source" && (source === "recovery" || source === "correction")) {
+  if (tone === "source" && source === "recovery") {
     return "bg-warn/20 text-warn border-warn/30";
   }
   switch (tone) {

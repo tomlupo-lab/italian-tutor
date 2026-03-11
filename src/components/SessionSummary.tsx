@@ -87,13 +87,13 @@ export default function SessionSummary({
     // Count correction cards created in the last 2 minutes (just saved)
     const twoMinAgo = Date.now() - 120_000;
     return allCards.filter(
-      (c) => (c.source === "recovery" || c.source === "correction") && (c._creationTime ?? 0) > twoMinAgo,
+      (c) => c.source === "recovery" && (c._creationTime ?? 0) > twoMinAgo,
     ).length;
   }, [allCards]);
 
   const recentCorrectionSummary = useMemo(() => {
     if (!allCards) return null;
-    const correctionCards = allCards.filter((card) => card.source === "recovery" || card.source === "correction");
+    const correctionCards = allCards.filter((card) => card.source === "recovery");
     if (correctionCards.length === 0) return null;
     const byCategory: Record<string, number> = {};
     for (const card of correctionCards) {

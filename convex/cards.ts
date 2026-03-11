@@ -7,10 +7,7 @@ type CardSource =
   | "seed"
   | "mission_topup"
   | "recovery"
-  | "manual"
-  | "builtin"
-  | "lesson"
-  | "correction";
+  | "manual";
 const DEFAULT_DIRECTION: CardDirection = "it_to_en";
 
 function resolveDirection(value?: string): CardDirection {
@@ -112,10 +109,6 @@ export const add = mutation({
       v.literal("seed"),
       v.literal("mission_topup"),
       v.literal("recovery"),
-      v.literal("manual"),
-      v.literal("builtin"),
-      v.literal("lesson"),
-      v.literal("correction"),
       v.literal("manual")
     ),
     direction: v.optional(v.union(v.literal("it_to_en"), v.literal("en_to_it"))),
@@ -150,10 +143,6 @@ export const bulkAdd = mutation({
           v.literal("seed"),
           v.literal("mission_topup"),
           v.literal("recovery"),
-          v.literal("manual"),
-          v.literal("builtin"),
-          v.literal("lesson"),
-          v.literal("correction"),
           v.literal("manual")
         ),
         direction: v.optional(v.union(v.literal("it_to_en"), v.literal("en_to_it"))),
@@ -366,7 +355,6 @@ export const getTags = query({
 });
 
 // Upsert a card — find by Italian text, create if missing, review if exists.
-// New writes use the newer source labels; legacy values stay valid for compatibility.
 export const upsert = mutation({
   args: {
     it: v.string(),
@@ -375,10 +363,6 @@ export const upsert = mutation({
       v.literal("seed"),
       v.literal("mission_topup"),
       v.literal("recovery"),
-      v.literal("manual"),
-      v.literal("builtin"),
-      v.literal("lesson"),
-      v.literal("correction"),
       v.literal("manual")
     ),
     direction: v.optional(v.union(v.literal("it_to_en"), v.literal("en_to_it"))),
@@ -458,30 +442,5 @@ export const upsert = mutation({
         lastReviewed: today,
       });
     }
-  },
-});
-
-export const migrateLegacySources = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const cards = await ctx.db.query("cards").collect();
-    let updated = 0;
-
-    for (const card of cards) {
-      const nextSource: CardSource | null =
-        card.source === "builtin"
-          ? "seed"
-          : card.source === "lesson"
-            ? "mission_topup"
-            : card.source === "correction"
-              ? "recovery"
-              : null;
-
-      if (!nextSource) continue;
-      await ctx.db.patch(card._id, { source: nextSource });
-      updated += 1;
-    }
-
-    return { updated };
   },
 });

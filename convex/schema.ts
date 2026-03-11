@@ -127,10 +127,6 @@ export default defineSchema({
       v.literal("seed"),
       v.literal("mission_topup"),
       v.literal("recovery"),
-      v.literal("manual"),
-      v.literal("builtin"),
-      v.literal("lesson"),
-      v.literal("correction"),
       v.literal("manual")
     ),
     direction: v.union(v.literal("it_to_en"), v.literal("en_to_it")),

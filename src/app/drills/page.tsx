@@ -107,7 +107,7 @@ export default function DrillsPage() {
   const recentErrors = useMemo(() => {
     if (!allCards) return [];
     return (allCards as AnyCard[])
-      .filter((card) => card.source === "recovery" || card.source === "correction")
+      .filter((card) => card.source === "recovery")
       .sort((a, b) => Number(b._creationTime ?? 0) - Number(a._creationTime ?? 0))
       .slice(0, 10);
   }, [allCards]);

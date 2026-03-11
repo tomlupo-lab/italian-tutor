@@ -465,7 +465,7 @@ export default function PracticePage() {
             {currentCard.level}
           </Badge>
         )}
-        {(currentCard.source === "recovery" || currentCard.source === "correction") && (
+        {currentCard.source === "recovery" && (
           <Badge tone="source" source="recovery">
             From your mistakes
           </Badge>

@@ -57,6 +57,31 @@ const DOMAIN_BY_TAG: Record<string, string> = {
   work: "work",
 };
 
+const TAG_TO_PATTERNS: Record<string, CurriculumPatternId[]> = {
+  basics: ["conversation_repair", "identity_essere", "want_voglio"],
+  bureaucracy: ["polite_request_vorrei", "conversation_repair", "ability_posso"],
+  food: ["polite_request_vorrei", "need_ho_bisogno_di", "want_voglio"],
+  health: ["need_ho_bisogno_di", "ability_posso", "conversation_repair"],
+  home: ["location_essere", "movement_vado", "polite_request_vorrei"],
+  housing: ["location_essere", "movement_vado", "polite_request_vorrei"],
+  media: ["opinion_secondo_me", "explanation_perche", "conversation_repair"],
+  money: ["polite_request_vorrei", "preference_preferisco", "plan_penso_di"],
+  negotiation: ["opinion_secondo_me", "plan_penso_di", "explanation_perche"],
+  neighborhood: ["location_essere", "movement_vado", "opinion_secondo_me"],
+  pharmacy: ["need_ho_bisogno_di", "ability_posso", "conversation_repair"],
+  planning: ["plan_penso_di", "future_simple", "explanation_perche"],
+  restaurant: ["polite_request_vorrei", "ability_posso", "need_ho_bisogno_di"],
+  routine: ["duration_da", "future_simple", "past_ho_participio"],
+  safety: ["ability_posso", "conversation_repair", "need_ho_bisogno_di"],
+  shopping: ["polite_request_vorrei", "preference_preferisco", "ability_posso"],
+  social: ["conversation_repair", "preference_preferisco", "like_mi_piace", "opinion_secondo_me"],
+  tech: ["plan_penso_di", "explanation_perche", "obligation_devo"],
+  time: ["future_simple", "duration_da", "past_ho_participio"],
+  transport: ["movement_vado", "ability_posso", "conversation_repair"],
+  travel: ["movement_vado", "location_essere", "ability_posso"],
+  work: ["obligation_devo", "plan_penso_di", "explanation_perche"],
+};
+
 const ERROR_TO_PATTERN: Record<string, CurriculumPatternId> = {
   agreement: "description_e_aggettivo",
   article_gender_number: "description_e_aggettivo",
@@ -88,6 +113,10 @@ export function phaseForLevel(level?: string): CurriculumPhase | undefined {
 export function domainForTag(tag?: string): string | undefined {
   if (!tag) return undefined;
   return DOMAIN_BY_TAG[tag] ?? tag;
+}
+
+export function domainsForTags(tags?: string[]) {
+  return Array.from(new Set((tags ?? []).map((tag) => domainForTag(tag)).filter(Boolean))) as string[];
 }
 
 function inferPatternIdFromText(sample: string): CurriculumPatternId | undefined {
@@ -237,4 +266,41 @@ export function deriveTemplateCurriculum(args: {
     }),
     domain: args.domain ?? domainForTag(primaryTag),
   };
+}
+
+export function deriveMissionTargetPatternIds(args: {
+  level: string;
+  tags?: string[];
+  errorFocus?: string[];
+}) {
+  const ordered: CurriculumPatternId[] = [];
+  const push = (patternId?: CurriculumPatternId) => {
+    if (patternId && !ordered.includes(patternId)) ordered.push(patternId);
+  };
+
+  for (const focus of args.errorFocus ?? []) {
+    push(ERROR_TO_PATTERN[focus]);
+  }
+
+  for (const tag of args.tags ?? []) {
+    for (const patternId of TAG_TO_PATTERNS[tag] ?? []) push(patternId);
+  }
+
+  if (args.level === "A1") {
+    ["polite_request_vorrei", "ability_posso", "movement_vado"].forEach((patternId) =>
+      push(patternId as CurriculumPatternId)
+    );
+  }
+  if (args.level === "A2") {
+    ["plan_penso_di", "past_ho_participio"].forEach((patternId) =>
+      push(patternId as CurriculumPatternId)
+    );
+  }
+  if (args.level === "B1") {
+    ["opinion_secondo_me", "explanation_perche", "future_simple"].forEach((patternId) =>
+      push(patternId as CurriculumPatternId)
+    );
+  }
+
+  return ordered.slice(0, 6);
 }

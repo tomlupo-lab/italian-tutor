@@ -22,6 +22,8 @@ type SelectorArgs = {
   types?: string[];
   skillIds?: string[];
   patternFocus?: string;
+  patternIds?: string[];
+  domains?: string[];
   tags?: string[];
   errorFocus?: string[];
   recentVariantKeys?: string[];
@@ -155,6 +157,9 @@ export function scoreTemplate(template: SharedExerciseTemplate, args: Omit<Selec
 
   const errorOverlap = template.errorFocus.filter((focus) => args.errorFocus?.includes(focus)).length;
   score += errorOverlap * 8;
+
+  if (template.patternId && args.patternIds?.includes(template.patternId)) score += 24;
+  if (template.domain && args.domains?.includes(template.domain)) score += 14;
 
   if (patternSignals) {
     if (patternSignals.types?.includes(template.type)) score += 12;

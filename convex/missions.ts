@@ -8,6 +8,7 @@ import {
   type CefrLevel,
   type MissionCheckpoint,
 } from "./progressionCatalog";
+import { deriveMissionTargetPatternIds } from "./curriculumMetadata";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEAK_EVIDENCE_THRESHOLD = 0.45;
@@ -165,6 +166,13 @@ export const seedCatalog = mutation({
     for (const mission of MISSIONS) {
       const payload = {
         ...mission,
+        targetPatternIds:
+          mission.targetPatternIds ??
+          deriveMissionTargetPatternIds({
+            level: mission.level,
+            tags: mission.tags,
+            errorFocus: mission.errorFocus,
+          }),
         checkpoints: mission.checkpoints ?? defaultMissionCheckpoints(mission),
       };
       const existing = await ctx.db

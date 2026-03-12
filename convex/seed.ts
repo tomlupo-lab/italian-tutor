@@ -405,11 +405,23 @@ export const repairRecoveryCards = mutation({
       if (card.source !== "recovery") continue;
       const prompt = card.prompt ?? card.example ?? card.en;
       const explanation = card.explanation ?? card.en;
+      const tag = card.tag ?? inferRecoveryTag(card.it, card.example);
+      const level = card.level ?? inferRecoveryLevel(card.it);
+      const curriculum = deriveCardCurriculum({
+        ...card,
+        prompt,
+        explanation,
+        tag,
+        level,
+      });
       await ctx.db.patch(card._id, {
         prompt,
         explanation,
-        tag: card.tag ?? inferRecoveryTag(card.it, card.example),
-        level: card.level ?? inferRecoveryLevel(card.it),
+        tag,
+        level,
+        phase: curriculum.phase,
+        patternId: curriculum.patternId,
+        domain: curriculum.domain,
         errorCategory: normalizeRecoveryErrorCategory(card.errorCategory),
         en:
           card.errorCategory === "translation"

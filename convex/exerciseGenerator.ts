@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { EXERCISE_TEMPLATES } from "./exerciseTemplatesData";
 import { MISSIONS } from "./progressionCatalog";
 import { selectSharedTemplates, type SharedExerciseTemplate } from "./sharedExercisePool";
+import { deriveMissionTargetPatternIds, domainsForTags } from "./curriculumMetadata";
 
 type GeneratedRow = {
   date: string;
@@ -570,10 +571,19 @@ export const generateExercises = mutation({
 
     for (const [type, targetCount] of mixEntries) {
       if (targetCount <= 0) continue;
+      const targetPatternIds =
+        mission.targetPatternIds ??
+        deriveMissionTargetPatternIds({
+          level: mission.level,
+          tags: mission.tags,
+          errorFocus: mission.errorFocus,
+        });
       const selected = selectSharedTemplates(sharedTemplates, {
         level: mission.level,
         types: [type],
         skillIds: mission.primarySkills,
+        patternIds: targetPatternIds,
+        domains: domainsForTags(mission.tags),
         tags: mission.tags,
         errorFocus: mission.errorFocus,
         recentVariantKeys,

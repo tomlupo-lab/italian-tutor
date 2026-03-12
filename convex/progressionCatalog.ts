@@ -19,6 +19,7 @@ export interface MissionTemplate {
   scenario: string;
   objective: string;
   tags: string[];
+  targetPatternIds?: string[];
   primarySkills: string[];
   errorFocus: string[];
   criticalErrorTypes: string[];

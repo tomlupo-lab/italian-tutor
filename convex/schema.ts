@@ -213,6 +213,7 @@ export default defineSchema({
     scenario: v.string(),
     objective: v.string(),
     tags: v.array(v.string()),
+    targetPatternIds: v.optional(v.array(v.string())),
     primarySkills: v.array(v.string()),
     errorFocus: v.array(v.string()),
     criticalErrorTypes: v.array(v.string()),

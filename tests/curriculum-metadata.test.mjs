@@ -55,10 +55,15 @@ const executableMetadataSource = ts.transpileModule(metadataSource, {
 }).outputText;
 const metadataContext = { exports: {}, module: { exports: {} }, result: null };
 vm.runInNewContext(
-  `${executableMetadataSource}\nresult = { CURRICULUM_PATTERN_IDS: exports.CURRICULUM_PATTERN_IDS, deriveCardCurriculum: exports.deriveCardCurriculum, deriveTemplateCurriculum: exports.deriveTemplateCurriculum, phaseForLevel: exports.phaseForLevel };`,
+  `${executableMetadataSource}\nresult = { CURRICULUM_PATTERN_IDS: exports.CURRICULUM_PATTERN_IDS, deriveCardCurriculum: exports.deriveCardCurriculum, deriveMissionTargetPatternIds: exports.deriveMissionTargetPatternIds, deriveTemplateCurriculum: exports.deriveTemplateCurriculum, phaseForLevel: exports.phaseForLevel };`,
   metadataContext,
 );
-const { CURRICULUM_PATTERN_IDS, deriveCardCurriculum, phaseForLevel } = metadataContext.result;
+const {
+  CURRICULUM_PATTERN_IDS,
+  deriveCardCurriculum,
+  deriveMissionTargetPatternIds,
+  phaseForLevel,
+} = metadataContext.result;
 
 const progressionSource = fs.readFileSync(new URL("../convex/progressionCatalog.ts", import.meta.url), "utf8");
 const MISSIONS = extractArray(progressionSource, "MISSIONS");
@@ -120,6 +125,23 @@ test("generated exercise templates expose valid curriculum metadata", () => {
     assert.ok(entry.patternId, `${entry.variantKey} should include patternId`);
     assert.equal(entry.phase, phaseForLevel(entry.level), `${entry.variantKey} should align phase with ${entry.level}`);
     assert.ok(CURRICULUM_PATTERN_IDS.includes(entry.patternId), `${entry.variantKey} uses unknown pattern ${entry.patternId}`);
+  }
+});
+
+test("missions derive valid target pattern ids", () => {
+  for (const mission of MISSIONS.filter((entry) => entry.level !== "B2")) {
+    const targetPatternIds = deriveMissionTargetPatternIds({
+      level: mission.level,
+      tags: mission.tags,
+      errorFocus: mission.errorFocus,
+    });
+    assert.ok(targetPatternIds.length > 0, `${mission.missionId} should derive target patterns`);
+    for (const patternId of targetPatternIds) {
+      assert.ok(
+        CURRICULUM_PATTERN_IDS.includes(patternId),
+        `${mission.missionId} uses unknown mission pattern ${patternId}`,
+      );
+    }
   }
 });
 

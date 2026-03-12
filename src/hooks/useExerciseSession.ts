@@ -172,6 +172,9 @@ function extractCorrectionCards(
             explanation: c.hint || `${c.options[c.correct]} completes the sentence correctly.`,
             tag: recoveryTagForExercise(ex),
             level: recoveryLevelForExercise(ex),
+            phase: ex.phase,
+            patternId: ex.patternId,
+            domain: ex.domain,
             skillId: ex.skillId,
             errorCategory: "cloze",
           }));
@@ -190,6 +193,9 @@ function extractCorrectionCards(
             explanation: "Rebuild the full sentence in the correct word order.",
             tag: recoveryTagForExercise(ex),
             level: recoveryLevelForExercise(ex),
+            phase: ex.phase,
+            patternId: ex.patternId,
+            domain: ex.domain,
             skillId: ex.skillId,
             errorCategory: "word_order",
           }));
@@ -211,6 +217,9 @@ function extractCorrectionCards(
                 explanation: s.hint || c.pattern_name || "Use the target pattern.",
                 tag: recoveryTagForExercise(ex),
                 level: recoveryLevelForExercise(ex),
+                phase: ex.phase,
+                patternId: ex.patternId,
+                domain: ex.domain,
                 skillId: ex.skillId,
                 errorCategory: "grammar_pattern",
               }));
@@ -234,6 +243,9 @@ function extractCorrectionCards(
                 explanation: "Recall the Italian version of this prompt.",
                 tag: recoveryTagForExercise(ex),
                 level: recoveryLevelForExercise(ex),
+                phase: ex.phase,
+                patternId: ex.patternId,
+                domain: ex.domain,
                 skillId: ex.skillId,
                 errorCategory: "translation",
               }));
@@ -256,6 +268,9 @@ function extractCorrectionCards(
                 explanation: s.explanation || "Correct the sentence and keep the intended meaning.",
                 tag: recoveryTagForExercise(ex),
                 level: recoveryLevelForExercise(ex),
+                phase: ex.phase,
+                patternId: ex.patternId,
+                domain: ex.domain,
                 skillId: ex.skillId,
                 errorCategory: "error_recognition",
               }));
@@ -273,6 +288,9 @@ function extractCorrectionCards(
             explanation: err.explanation || "Use the corrected Italian version.",
             tag: recoveryTagForExercise(ex),
             level: recoveryLevelForExercise(ex),
+            phase: ex.phase,
+            patternId: ex.patternId,
+            domain: ex.domain,
             skillId: ex.skillId,
             errorCategory: "conversation",
           }));

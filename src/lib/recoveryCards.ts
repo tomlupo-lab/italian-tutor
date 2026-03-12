@@ -1,4 +1,5 @@
 import type { Exercise } from "@/lib/exerciseTypes";
+import { deriveCardCurriculum } from "../../convex/curriculumMetadata";
 
 type RecoveryCardDraft = {
   it: string;
@@ -8,6 +9,9 @@ type RecoveryCardDraft = {
   explanation?: string;
   tag?: string;
   level?: string;
+  phase?: string;
+  patternId?: string;
+  domain?: string;
   skillId?: string;
   errorCategory?: string;
 };
@@ -88,6 +92,17 @@ export function buildRecoveryCard(draft: RecoveryCardDraft) {
   const example = draft.example ? normalizeWhitespace(draft.example) : undefined;
   const explanation = draft.explanation ? normalizeWhitespace(draft.explanation) : undefined;
   const combined = [corrected, prompt, example, explanation].filter(Boolean).join(" ");
+  const tag = inferRecoveryTag(combined, draft.tag);
+  const curriculum = deriveCardCurriculum({
+    it: corrected,
+    prompt,
+    example,
+    tag,
+    level: draft.level,
+    phase: draft.phase,
+    patternId: draft.patternId,
+    domain: draft.domain,
+  });
 
   return {
     it: corrected,
@@ -95,8 +110,11 @@ export function buildRecoveryCard(draft: RecoveryCardDraft) {
     prompt,
     example,
     explanation: explanation ?? "Recall and say the corrected Italian sentence.",
-    tag: inferRecoveryTag(combined, draft.tag),
+    tag,
     level: draft.level,
+    phase: curriculum.phase,
+    patternId: curriculum.patternId,
+    domain: curriculum.domain,
     source: "recovery" as const,
     skillId: draft.skillId,
     errorCategory: normalizeRecoveryErrorKey(draft.errorCategory),

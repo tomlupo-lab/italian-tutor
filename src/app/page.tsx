@@ -101,6 +101,10 @@ export default function Home() {
     };
   })();
 
+  const missionDestination = activeProgress?.mission
+    ? withBasePath("/missions/current")
+    : withBasePath("/missions");
+
   const nextStep = (() => {
     if ((activeProgress?.active.criticalErrorsCount ?? 0) > 0) {
       return {
@@ -116,23 +120,23 @@ export default function Home() {
       };
     }
 
+    if (activeProgress?.mission) {
+      return {
+        href: missionDestination,
+        label: "Continue mission",
+        detail: `${activeProgress.mission.displayLevel ?? activeProgress.mission.level} mission • ${missionProgress?.percent ?? 0}% complete`,
+        icon: Flag,
+        accentClass: "border-accent/20 bg-accent/10 hover:bg-accent/15",
+        iconClass: "text-accent-light",
+      };
+    }
+
     if (dueCardsCount > 0) {
       return {
         href: withBasePath("/practice"),
         label: "Review words",
         detail: `${dueCardsCount} due card${dueCardsCount === 1 ? "" : "s"} ready for recall`,
         icon: BookOpen,
-        accentClass: "border-accent/20 bg-accent/10 hover:bg-accent/15",
-        iconClass: "text-accent-light",
-      };
-    }
-
-    if (activeProgress?.mission) {
-      return {
-        href: withBasePath("/missions/current"),
-        label: "Continue mission",
-        detail: `${activeProgress.mission.displayLevel ?? activeProgress.mission.level} mission • ${missionProgress?.percent ?? 0}% complete`,
-        icon: Flag,
         accentClass: "border-accent/20 bg-accent/10 hover:bg-accent/15",
         iconClass: "text-accent-light",
       };
@@ -214,7 +218,7 @@ export default function Home() {
               </p>
             </Link>
             <Link
-              href={withBasePath("/missions/current")}
+              href={missionDestination}
               className="rounded-2xl border border-white/10 bg-card px-3 py-4 text-left transition hover:bg-white/[0.03]"
             >
               <div className="flex items-center gap-2">
@@ -229,7 +233,7 @@ export default function Home() {
         </section>
 
         <Link
-          href={withBasePath("/missions/current")}
+          href={missionDestination}
           className="block rounded-2xl border border-white/10 bg-card px-4 py-5 transition hover:bg-white/[0.03]"
         >
           <div className="flex items-start justify-between gap-3">

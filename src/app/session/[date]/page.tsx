@@ -32,15 +32,6 @@ interface DueCard {
   example?: string;
 }
 
-function shuffled<T>(items: T[]): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
-
 export default function SessionPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -147,12 +138,12 @@ export default function SessionPage() {
         };
       })
       .sort((a, b) => a.order - b.order);
-    const normalizedDueCards = shuffled((dueCards as DueCard[] | undefined) ?? []).map((card) => ({
+    const normalizedDueCards = ((dueCards as DueCard[] | undefined) ?? []).map((card) => ({
       ...card,
     }));
     return selectSessionExercises({
       mode: selectedMode,
-      exercises: selectedMode === "bronze" ? shuffled(missionExercises) : missionExercises,
+      exercises: missionExercises,
       dueCards: normalizedDueCards,
       date: dateParam,
     });

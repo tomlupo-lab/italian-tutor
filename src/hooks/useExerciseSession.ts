@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { getTodayWarsaw } from "@/lib/date";
@@ -63,7 +63,18 @@ interface CorrectionCard {
 }
 
 const TIER_KEY = "italian-tutor-tier-scores";
+const SESSION_RESUME_PREFIX = "italian-tutor:session-resume";
 const { computeTierCredits, evaluateGoldContract } = sessionContracts;
+
+interface PersistedExerciseSession {
+  mode: ExerciseMode;
+  date: string;
+  exerciseIds: string[];
+  current: number;
+  startedAt: number;
+  clientSessionId: string;
+  results: Array<[string, ExerciseResult]>;
+}
 
 function buildSessionSignature(exercises: Exercise[], mode: ExerciseMode): string {
   const typeCounts = new Map<string, number>();
@@ -139,6 +150,45 @@ function persistTierScore(date: string, mode: ExerciseMode, scorePercent: number
   } catch {
     // non-critical
   }
+}
+
+function buildResumeStorageKey(date: string, mode: ExerciseMode, exercises: Exercise[]) {
+  return `${SESSION_RESUME_PREFIX}:${date}:${mode}:${exercises.map((ex) => ex._id).join(",")}`;
+}
+
+function loadPersistedSession(
+  key: string,
+  mode: ExerciseMode,
+  date: string,
+  exercises: Exercise[],
+): PersistedExerciseSession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedExerciseSession;
+    const exerciseIds = exercises.map((ex) => ex._id);
+    if (
+      parsed.mode !== mode ||
+      parsed.date !== date ||
+      parsed.exerciseIds.join(",") !== exerciseIds.join(",")
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearPersistedSession(key: string) {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(key);
+}
+
+function savePersistedSession(key: string, payload: PersistedExerciseSession) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(key, JSON.stringify(payload));
 }
 
 /**
@@ -474,6 +524,15 @@ export function useExerciseSession({
   mode,
   date,
 }: UseExerciseSessionOptions) {
+  const sessionDate = date ?? getTodayWarsaw();
+  const resumeStorageKey = useMemo(
+    () => buildResumeStorageKey(sessionDate, mode, exercises),
+    [sessionDate, mode, exercises],
+  );
+  const initialPersistedState = useMemo(
+    () => loadPersistedSession(resumeStorageKey, mode, sessionDate, exercises),
+    [resumeStorageKey, mode, sessionDate, exercises],
+  );
   const saveSession = useMutation(api.sessions.save);
   const attachMissionOutcome = useMutation(api.sessions.attachMissionOutcome);
   const markComplete = useMutation(api.exercises.markComplete);
@@ -483,14 +542,18 @@ export function useExerciseSession({
   const updateCardExplanation = useMutation(api.cards.updateExplanation);
   const recordMissionCompletion = useMutation(api.missions.recordLessonCompletion);
 
-  const startedAt = useRef(Date.now());
-  const clientSessionId = useRef(`sess-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
-  const [current, setCurrent] = useState(0);
-  const [results, setResults] = useState<Map<string, ExerciseResult>>(
-    new Map(),
+  const startedAt = useRef(initialPersistedState?.startedAt ?? Date.now());
+  const clientSessionId = useRef(
+    initialPersistedState?.clientSessionId ?? `sess-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
   );
-  const resultsRef = useRef<Map<string, ExerciseResult>>(new Map());
-  const submittedExerciseIds = useRef<Set<string>>(new Set());
+  const [current, setCurrent] = useState(initialPersistedState?.current ?? 0);
+  const [results, setResults] = useState<Map<string, ExerciseResult>>(
+    () => new Map(initialPersistedState?.results ?? []),
+  );
+  const resultsRef = useRef<Map<string, ExerciseResult>>(new Map(initialPersistedState?.results ?? []));
+  const submittedExerciseIds = useRef<Set<string>>(
+    new Set((initialPersistedState?.results ?? []).map(([exerciseId]) => exerciseId)),
+  );
   const [finalResults, setFinalResults] = useState<Map<string, ExerciseResult> | null>(null);
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -504,10 +567,180 @@ export function useExerciseSession({
   const progress = total > 0 ? (current / total) * 100 : 0;
   const visibleResults = finalResults ?? results;
 
+  useEffect(() => {
+    if (done || total === 0) {
+      clearPersistedSession(resumeStorageKey);
+      return;
+    }
+
+    savePersistedSession(resumeStorageKey, {
+      mode,
+      date: sessionDate,
+      exerciseIds: sessionExercises.map((ex) => ex._id),
+      current,
+      startedAt: startedAt.current,
+      clientSessionId: clientSessionId.current,
+      results: Array.from(resultsRef.current.entries()),
+    });
+  }, [current, done, mode, resumeStorageKey, sessionDate, sessionExercises, total, visibleResults]);
+
   /** Errors extracted from exercise results — all drill types */
   const sessionErrors = useMemo(
     () => extractSessionErrors(sessionExercises, visibleResults),
     [sessionExercises, visibleResults],
+  );
+
+  const finalizeSession = useCallback(
+    async (allResults: Map<string, ExerciseResult>) => {
+      setDone(true);
+      clearPersistedSession(resumeStorageKey);
+
+      if (allResults.size === 0) {
+        setFinalResults(allResults);
+        setError(null);
+        return;
+      }
+
+      setSaving(true);
+      try {
+        const elapsed = Date.now() - startedAt.current;
+        const totalMinutes = Math.max(1, Math.round(elapsed / 60000));
+        const finalErrors = extractSessionErrors(sessionExercises, allResults);
+
+        setFinalResults(allResults);
+        const { accuracy, totalItems } = summarizeResults(allResults.values());
+        const pct = totalItems > 0 ? accuracy : 0.5;
+        const rating = Math.round(pct * 4) + 1;
+
+        const saveResult = await saveSession({
+          date: sessionDate,
+          clientSessionId: clientSessionId.current,
+          type: "lesson",
+          duration: totalMinutes,
+          mode,
+          rating,
+          exercisesCompleted: allResults.size,
+          exercisesTotal: total,
+          cardsReviewed: 0,
+          cardsCorrect: 0,
+          newPhrases: [],
+          phrasesUsed: [],
+          errors: finalErrors,
+        });
+        persistTierScore(sessionDate, mode, Math.round(pct * 100));
+
+        const sessionSkillImpact = computeSessionSkillImpact(sessionExercises, allResults);
+        const { bronzeCredit, silverCredit, goldCredit } = computeTierCredits(
+          sessionExercises,
+          allResults,
+        );
+        const goldContract =
+          mode === "gold" ? evaluateGoldContract(sessionExercises, allResults) : null;
+        const goldContractStatus = goldContract?.contractStatus as
+          | "strong"
+          | "partial"
+          | "missed"
+          | undefined;
+
+        const errorMap = new Map<string, number>();
+        for (const err of finalErrors) {
+          const key = mapErrorCategoryToKey(err.category);
+          if (!key) continue;
+          errorMap.set(key, (errorMap.get(key) ?? 0) + 1);
+        }
+
+        const criticalErrors = [
+          "off_topic",
+          "incomplete_response",
+          "dosage_misunderstood",
+          "negation_reversal",
+          "instruction_misread",
+        ].reduce((sum, key) => sum + (errorMap.get(key) ?? 0), 0);
+
+        if (saveResult.status === "created" && "id" in saveResult && saveResult.id) {
+          try {
+            const sessionSignature = buildSessionSignature(exercises, mode);
+            const missionResult = await recordMissionCompletion({
+              sessionId: saveResult.id,
+              mode,
+              sessionDate,
+              scorePercent: Math.round(pct * 100),
+              bronzeCredit,
+              silverCredit,
+              goldCredit,
+              minutes: totalMinutes,
+              sessionSignature,
+              criticalErrors,
+              goldCheckpointPassed: goldContract?.checkpointPassed,
+              goldContractStatus,
+              confidenceWeight: Math.min(1, Math.max(0.25, allResults.size / 20)),
+              skillDeltas: sessionSkillImpact.skills.map((skill) => ({
+                skillKey: skill.skillKey,
+                points: skill.points,
+                evidenceCount: skill.evidenceCount,
+                proficiencySample: skill.proficiencySample,
+              })),
+              evidenceEntries: computeExerciseEvidenceEntries(sessionExercises, allResults),
+              errorDeltas: Array.from(errorMap.entries()).map(([errorKey, count]) => ({
+                errorKey,
+                count,
+              })),
+            });
+            await attachMissionOutcome({
+              sessionId: saveResult.id,
+              missionId: missionResult.missionId,
+              checkpointAwardedId: missionResult.checkpointAwardedId ?? undefined,
+              checkpointPassed: missionResult.checkpointPassed,
+              goldContractStatus: missionResult.goldContractStatus as
+                | "strong"
+                | "partial"
+                | "missed"
+                | undefined,
+              duplicatePenaltyApplied: missionResult.duplicateSameDay,
+              appliedCredits: missionResult.appliedCredits,
+            });
+            if (missionResult.missionCompleted) {
+              setMissionCompleted(true);
+            }
+          } catch {
+            // non-critical
+          }
+        }
+
+        if (saveResult.status === "created") {
+          const correctionCards = extractCorrectionCards(sessionExercises, allResults);
+          if (correctionCards.length > 0) {
+            bulkAddCards({ cards: correctionCards })
+              .then(() => {
+                enrichCorrectionCards(correctionCards, updateCardExplanation);
+              })
+              .catch(() => {
+                // Non-critical — cards can be generated again
+              });
+          }
+        }
+
+        setError(null);
+        clientSessionId.current = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to save session");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [
+      attachMissionOutcome,
+      bulkAddCards,
+      exercises,
+      mode,
+      recordMissionCompletion,
+      resumeStorageKey,
+      saveSession,
+      sessionDate,
+      sessionExercises,
+      total,
+      updateCardExplanation,
+    ],
   );
 
   /** Record a result for the current exercise and advance */
@@ -576,137 +809,7 @@ export function useExerciseSession({
 
       // Advance or finish
       if (current + 1 >= total) {
-        setDone(true);
-        // Save session
-        setSaving(true);
-        try {
-          const sessionDate = date ?? getTodayWarsaw();
-          const elapsed = Date.now() - startedAt.current;
-          const totalMinutes = Math.round(elapsed / 60000);
-
-          // Compute rating from results
-          const allResults = new Map(nextResults);
-          setFinalResults(allResults);
-          const { accuracy, totalItems } = summarizeResults(allResults.values());
-          const pct = totalItems > 0 ? accuracy : 0.5;
-          const rating = Math.round(pct * 4) + 1; // 1-5
-
-          const saveResult = await saveSession({
-            date: sessionDate,
-            clientSessionId: clientSessionId.current,
-            type: "lesson",
-            duration: totalMinutes,
-            mode,
-            rating,
-            exercisesCompleted: allResults.size,
-            exercisesTotal: total,
-            cardsReviewed: 0,
-            cardsCorrect: 0,
-            newPhrases: [],
-            phrasesUsed: [],
-            errors: sessionErrors,
-          });
-          persistTierScore(sessionDate, mode, Math.round(pct * 100));
-
-          // Mission progression update (non-blocking but awaited to keep state consistent)
-          const sessionSkillImpact = computeSessionSkillImpact(sessionExercises, allResults);
-          const { bronzeCredit, silverCredit, goldCredit } = computeTierCredits(
-            sessionExercises,
-            allResults,
-          );
-          const goldContract =
-            mode === "gold"
-              ? evaluateGoldContract(sessionExercises, allResults)
-              : null;
-          const goldContractStatus = goldContract?.contractStatus as
-            | "strong"
-            | "partial"
-            | "missed"
-            | undefined;
-
-          const errorMap = new Map<string, number>();
-          for (const err of sessionErrors) {
-            const key = mapErrorCategoryToKey(err.category);
-            if (!key) continue;
-            errorMap.set(key, (errorMap.get(key) ?? 0) + 1);
-          }
-
-          const criticalErrors = ["off_topic", "incomplete_response", "dosage_misunderstood", "negation_reversal", "instruction_misread"]
-            .reduce((sum, key) => sum + (errorMap.get(key) ?? 0), 0);
-
-          if (saveResult.status === "created" && "id" in saveResult && saveResult.id) {
-            try {
-              const sessionSignature = buildSessionSignature(exercises, mode);
-              const missionResult = await recordMissionCompletion({
-                sessionId: saveResult.id,
-                mode,
-                sessionDate,
-                scorePercent: Math.round(pct * 100),
-                bronzeCredit,
-                silverCredit,
-                goldCredit,
-                minutes: totalMinutes,
-                sessionSignature,
-                criticalErrors,
-                goldCheckpointPassed: goldContract?.checkpointPassed,
-                goldContractStatus,
-                confidenceWeight: Math.min(1, Math.max(0.25, allResults.size / 20)),
-                skillDeltas: sessionSkillImpact.skills.map((skill) => ({
-                  skillKey: skill.skillKey,
-                  points: skill.points,
-                  evidenceCount: skill.evidenceCount,
-                  proficiencySample: skill.proficiencySample,
-                })),
-                evidenceEntries: computeExerciseEvidenceEntries(sessionExercises, allResults),
-                errorDeltas: Array.from(errorMap.entries()).map(([errorKey, count]) => ({
-                  errorKey,
-                  count,
-                })),
-              });
-              await attachMissionOutcome({
-                sessionId: saveResult.id,
-                missionId: missionResult.missionId,
-                checkpointAwardedId: missionResult.checkpointAwardedId ?? undefined,
-                checkpointPassed: missionResult.checkpointPassed,
-                goldContractStatus: missionResult.goldContractStatus as
-                  | "strong"
-                  | "partial"
-                  | "missed"
-                  | undefined,
-                duplicatePenaltyApplied: missionResult.duplicateSameDay,
-                appliedCredits: missionResult.appliedCredits,
-              });
-              if (missionResult.missionCompleted) {
-                setMissionCompleted(true);
-              }
-            } catch {
-              // non-critical
-            }
-          }
-
-          if (saveResult.status === "created") {
-            // Extract correction cards from wrong answers and add to SRS deck.
-            // Skip on duplicate save retries to avoid duplicate correction cards.
-            const correctionCards = extractCorrectionCards(sessionExercises, allResults);
-            if (correctionCards.length > 0) {
-              bulkAddCards({ cards: correctionCards })
-                .then(() => {
-                  // Enrich card explanations with AI (fire and forget)
-                  enrichCorrectionCards(correctionCards, updateCardExplanation);
-                })
-                .catch(() => {
-                  // Non-critical — cards can be generated again
-                });
-            }
-          }
-
-          setError(null);
-          clientSessionId.current = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-        } catch (e) {
-          setError(e instanceof Error ? e.message : "Failed to save session");
-        } finally {
-          setSaving(false);
-        }
+        await finalizeSession(new Map(nextResults));
       } else {
         setCurrent((c) => c + 1);
       }
@@ -724,20 +827,23 @@ export function useExerciseSession({
       bulkAddCards,
       updateCardExplanation,
       recordMissionCompletion,
+      finalizeSession,
       mode,
-      date,
-    sessionErrors,
-  ],
+    ],
   );
 
   /** Skip to next exercise without recording a result */
   const skip = useCallback(() => {
     if (current + 1 >= total) {
-      setDone(true);
+      void finalizeSession(new Map(resultsRef.current));
     } else {
       setCurrent((c) => c + 1);
     }
-  }, [current, total]);
+  }, [current, finalizeSession, total]);
+
+  const endSession = useCallback(() => {
+    void finalizeSession(new Map(resultsRef.current));
+  }, [finalizeSession]);
 
   return {
     current,
@@ -754,6 +860,7 @@ export function useExerciseSession({
     missionCompleted,
     submitResult,
     skip,
+    endSession,
   };
 }
 

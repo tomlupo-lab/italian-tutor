@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ArrowRight,
   Compass,
@@ -33,6 +33,13 @@ const PATTERN_OPTIONS = [
   { key: "conversation_repair", icon: MessageSquareQuote },
 ] as const satisfies ReadonlyArray<{ key: PatternFocusKey; icon: unknown }>;
 
+const LAST_PATTERN_KEY = "italian-tutor:last-pattern-lane";
+
+type StoredPatternLane = {
+  pattern: PatternFocusKey;
+  level: Level;
+};
+
 export default function PatternsPage() {
   const learnerState = useQuery(api.learnerState.getSnapshot, {}) as LearnerStateSnapshot | undefined;
   const curriculumSummary = useQuery(api.contentAudit.getCurriculumSummary, {});
@@ -41,6 +48,7 @@ export default function PatternsPage() {
   const recommendedPattern = learnerState?.adaptiveFocus.recommendedPatterns?.[0] as PatternFocusKey | undefined;
   const [selectedLevel, setSelectedLevel] = useState<Level>(normalizePatternPracticeLevel(currentLevel));
   const [selectedPattern, setSelectedPattern] = useState<PatternFocusKey>(recommendedPattern ?? "requests_and_needs");
+  const [lastLane, setLastLane] = useState<StoredPatternLane | null>(null);
 
   useEffect(() => {
     setSelectedLevel(normalizePatternPracticeLevel(currentLevel));
@@ -52,10 +60,30 @@ export default function PatternsPage() {
     }
   }, [recommendedPattern]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(LAST_PATTERN_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as StoredPatternLane;
+      if (!PATTERN_FOCUS_CONFIG[parsed.pattern]) return;
+      setLastLane(parsed);
+    } catch {
+      localStorage.removeItem(LAST_PATTERN_KEY);
+    }
+  }, []);
+
   const selectedPatternMeta = PATTERN_FOCUS_CONFIG[selectedPattern];
   const coverage = curriculumSummary?.levels
     ?.find((row) => row.level === selectedLevel)
     ?.lanes?.find((lane) => lane.patternKey === selectedPattern);
+
+  const persistLane = useCallback((pattern: PatternFocusKey, level: Level) => {
+    if (typeof window === "undefined") return;
+    const payload = { pattern, level };
+    localStorage.setItem(LAST_PATTERN_KEY, JSON.stringify(payload));
+    setLastLane(payload);
+  }, []);
 
   return (
     <DashboardShell contentClassName="gap-6">
@@ -66,6 +94,35 @@ export default function PatternsPage() {
           Build reusable Italian with one focused lane, then carry it into drills and missions.
         </p>
       </section>
+
+      {lastLane ? (
+        <section className="rounded-2xl border border-white/10 bg-card p-4 space-y-3">
+          <p className="text-[11px] uppercase tracking-wider text-accent-light">Continue last lane</p>
+          <p className="text-sm font-medium">
+            {lastLane.level} • {PATTERN_FOCUS_CONFIG[lastLane.pattern].label}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={withBasePath(`/drills?focus=pattern&level=${lastLane.level}&pattern=${lastLane.pattern}`)}
+              onClick={() => persistLane(lastLane.pattern, lastLane.level)}
+              className="inline-flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/20 px-4 py-2 text-sm font-medium text-accent-light"
+            >
+              Continue pattern practice
+              <ArrowRight size={16} />
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedLevel(lastLane.level);
+                setSelectedPattern(lastLane.pattern);
+              }}
+              className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/75 transition hover:bg-white/[0.05]"
+            >
+              Load selection
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="space-y-3">
         <div className="px-1">
@@ -153,6 +210,7 @@ export default function PatternsPage() {
         </div>
         <Link
           href={withBasePath(`/drills?focus=pattern&level=${selectedLevel}&pattern=${selectedPattern}`)}
+          onClick={() => persistLane(selectedPattern, selectedLevel)}
           className="inline-flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/20 px-4 py-2 text-sm font-medium text-accent-light"
         >
           Start pattern practice

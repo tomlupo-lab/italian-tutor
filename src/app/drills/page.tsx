@@ -20,8 +20,18 @@ import { buildRecoveryCard, recoveryLevelForExercise, recoveryTagForExercise } f
 import Link from "next/link";
 
 type PracticeMode = "errors" | "random" | "typed" | "pattern";
+type PersistedDrillSession = {
+  mode: PracticeMode;
+  selectedType: string | null;
+  recoveryFocus: boolean;
+  patternFocus: { pattern: PatternFocusKey; level: string } | null;
+  exercises: Exercise[];
+  current: number;
+  results: Array<[string, ExerciseResult]>;
+};
 
 type AnyCard = Record<string, unknown>;
+const DRILL_SESSION_KEY = "italian-tutor:drills-session";
 
 const DRILL_TYPES: { type: string; label: string; emoji: string; description: string }[] = [
   { type: "cloze", label: "Fill-in-blank", emoji: "📝", description: "Fill in the missing word" },
@@ -73,6 +83,7 @@ export default function DrillsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [resumeLoaded, setResumeLoaded] = useState(false);
 
   const allCards = useQuery(api.cards.getAll);
   const learnerState = useQuery(api.learnerState.getSnapshot, {});
@@ -83,6 +94,10 @@ export default function DrillsPage() {
   );
   const bulkAddCards = useMutation(api.cards.bulkAdd);
   const generatePracticeSet = useMutation(api.exercises.generatePracticeSet);
+  const saveSession = useMutation(api.sessions.save);
+  const startedAt = useRef(Date.now());
+  const clientSessionId = useRef(`quick-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+  const sessionSavedRef = useRef(false);
 
   const recentErrors = useMemo(() => {
     if (!allCards) return [];
@@ -96,6 +111,67 @@ export default function DrillsPage() {
     return learnerState?.adaptiveFocus?.blockers ?? [];
   }, [learnerState?.adaptiveFocus?.blockers]);
 
+  const persistDrillSession = useCallback(
+    (next: PersistedDrillSession | null) => {
+      if (typeof window === "undefined") return;
+      if (!next || next.exercises.length === 0 || next.current >= next.exercises.length) {
+        localStorage.removeItem(DRILL_SESSION_KEY);
+        return;
+      }
+      localStorage.setItem(DRILL_SESSION_KEY, JSON.stringify(next));
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(DRILL_SESSION_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as PersistedDrillSession;
+      setMode(parsed.mode);
+      setSelectedType(parsed.selectedType);
+      setRecoveryFocus(parsed.recoveryFocus);
+      setPatternFocus(parsed.patternFocus);
+      setExercises(parsed.exercises);
+      setCurrent(parsed.current);
+      setResults(new Map(parsed.results));
+    } catch {
+      localStorage.removeItem(DRILL_SESSION_KEY);
+    } finally {
+      setResumeLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!resumeLoaded) return;
+    if (!mode || done || loading) {
+      if (!loading) persistDrillSession(null);
+      return;
+    }
+    persistDrillSession({
+      mode,
+      selectedType,
+      recoveryFocus,
+      patternFocus,
+      exercises,
+      current,
+      results: Array.from(results.entries()),
+    });
+  }, [
+    current,
+    done,
+    exercises,
+    loading,
+    mode,
+    patternFocus,
+    persistDrillSession,
+    recoveryFocus,
+    results,
+    resumeLoaded,
+    selectedType,
+  ]);
+
   const startPractice = useCallback(
     async (selectedMode: PracticeMode, typeFilter?: string) => {
       setCurrent(0);
@@ -103,6 +179,9 @@ export default function DrillsPage() {
       setDone(false);
       setError(null);
       setMode(selectedMode);
+      startedAt.current = Date.now();
+      clientSessionId.current = `quick-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      sessionSavedRef.current = false;
 
       if (selectedMode === "random" || selectedMode === "typed") {
         setSelectedType(typeFilter ?? null);
@@ -153,6 +232,9 @@ export default function DrillsPage() {
     setError(null);
     setMode("pattern");
     setPatternFocus({ pattern, level });
+    startedAt.current = Date.now();
+    clientSessionId.current = `quick-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    sessionSavedRef.current = false;
 
     setLoading(true);
     try {
@@ -174,6 +256,54 @@ export default function DrillsPage() {
       setLoading(false);
     }
   }, [generatePracticeSet]);
+
+  const saveDrillSession = useCallback(
+    async (finalResults: Map<string, ExerciseResult>) => {
+      if (sessionSavedRef.current || finalResults.size === 0 || !mode) return;
+      sessionSavedRef.current = true;
+      const correct = Array.from(finalResults.values()).filter((result) => {
+        if ("correct" in result && typeof result.correct === "boolean") return result.correct;
+        if ("scores" in result && Array.isArray(result.scores)) return result.scores.every(Boolean);
+        return false;
+      }).length;
+      const exercisesCompleted = finalResults.size;
+      const ratingBase = exercisesCompleted > 0 ? correct / exercisesCompleted : 0.5;
+      const rating = Math.max(1, Math.min(5, Math.round(ratingBase * 4) + 1));
+      const duration = Math.max(1, Math.round((Date.now() - startedAt.current) / 60000));
+      const topic =
+        mode === "pattern" && patternFocus
+          ? `${patternFocus.level}:${patternFocus.pattern}`
+          : selectedType ?? mode;
+
+      try {
+        await saveSession({
+          date: today,
+          clientSessionId: clientSessionId.current,
+          duration,
+          type: "quick_practice",
+          mode,
+          exercisesCompleted,
+          exercisesTotal: exercises.length,
+          cardsReviewed: 0,
+          cardsCorrect: 0,
+          topic,
+          errors: [],
+          newPhrases: [],
+          phrasesUsed: [],
+          rating,
+        });
+      } catch {
+        sessionSavedRef.current = false;
+      }
+    },
+    [exercises.length, mode, patternFocus, saveSession, selectedType, today],
+  );
+
+  const endSession = useCallback(() => {
+    void saveDrillSession(results);
+    setDone(true);
+    persistDrillSession(null);
+  }, [persistDrillSession, results, saveDrillSession]);
 
   const prevPracticeRef = useRef(practiceExercises);
   useEffect(() => {
@@ -206,6 +336,7 @@ export default function DrillsPage() {
     });
 
     if (current + 1 >= exercises.length) {
+      void saveDrillSession(allResults);
       setDone(true);
       const wrongCards: Array<ReturnType<typeof buildRecoveryCard>> = [];
       const allResults = new Map(results);
@@ -274,15 +405,16 @@ export default function DrillsPage() {
     } else {
       setCurrent((value) => value + 1);
     }
-  }, [bulkAddCards, current, currentExercise, exercises, results]);
+  }, [bulkAddCards, current, currentExercise, exercises, results, saveDrillSession]);
 
   const handleSkip = useCallback(() => {
     if (current + 1 >= exercises.length) {
+      void saveDrillSession(results);
       setDone(true);
       return;
     }
     setCurrent((value) => value + 1);
-  }, [current, exercises.length]);
+  }, [current, exercises.length, results, saveDrillSession]);
 
   const correctCount = useMemo(() => {
     return Array.from(results.values()).filter((result) => {
@@ -330,6 +462,7 @@ export default function DrillsPage() {
   const availableCount = practiceExercises?.length ?? 0;
 
   useEffect(() => {
+    if (!resumeLoaded) return;
     if (mode || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("focus") === "recovery") {
@@ -345,7 +478,15 @@ export default function DrillsPage() {
         startPatternPractice(pattern, level);
       }
     }
-  }, [mode, startPractice, startPatternPractice]);
+  }, [mode, resumeLoaded, startPractice, startPatternPractice]);
+
+  if (!resumeLoaded) {
+    return (
+      <main className="min-h-screen max-w-lg mx-auto px-4 flex items-center justify-center">
+        <Loader2 size={32} className="text-accent animate-spin" />
+      </main>
+    );
+  }
 
   if (!mode || (exercises.length === 0 && !loading)) {
     return (
@@ -479,8 +620,31 @@ export default function DrillsPage() {
               </section>
             </>
           ) : (
-            <div className="rounded-2xl border border-white/10 bg-card px-4 py-4 text-sm text-white/55">
-              This page stays focused on recovery. Open drill choice is still available from Learn patterns or the regular drills page.
+            <div className="space-y-3 rounded-2xl border border-white/10 bg-card px-4 py-4">
+              <p className="text-sm text-white/65">Want a different lane after cleanup?</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <button
+                  onClick={() => {
+                    setRecoveryFocus(false);
+                    startPractice("random");
+                  }}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-sm text-left hover:bg-white/[0.06] transition"
+                >
+                  Mixed drills
+                </button>
+                <Link
+                  href={withBasePath("/patterns")}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-sm hover:bg-white/[0.06] transition"
+                >
+                  Learn patterns
+                </Link>
+                <Link
+                  href={withBasePath("/practice")}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-sm hover:bg-white/[0.06] transition"
+                >
+                  Review words
+                </Link>
+              </div>
             </div>
           )}
         </section>
@@ -530,19 +694,19 @@ export default function DrillsPage() {
         </div>
 
         <div className="w-full flex flex-col gap-3">
-            <button
-              onClick={() => {
-                if (mode === "pattern" && patternFocus) {
-                  startPatternPractice(patternFocus.pattern, patternFocus.level);
-                  return;
+          <button
+            onClick={() => {
+              if (mode === "pattern" && patternFocus) {
+                startPatternPractice(patternFocus.pattern, patternFocus.level);
+                return;
               }
-              startPractice(mode);
+              startPractice(mode, selectedType ?? undefined);
             }}
             className="w-full px-5 py-3 bg-accent rounded-xl text-sm font-medium hover:bg-accent/80 transition flex items-center justify-center gap-2"
           >
-              <RefreshCw size={16} />
-              {mode === "errors" ? "More recovery practice" : mode === "pattern" ? "More pattern practice" : sessionSummary.primary}
-            </button>
+            <RefreshCw size={16} />
+            {mode === "errors" ? "More recovery practice" : mode === "pattern" ? "More pattern practice" : sessionSummary.primary}
+          </button>
           {mode === "pattern" ? (
             <Link
               href={withBasePath("/patterns")}
@@ -592,14 +756,24 @@ export default function DrillsPage() {
         </span>
       </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent-light">
-            {currentExercise.type.replace("_", " ")}
-          </span>
-          <span className="text-xs text-white/20">
-            {mode === "errors" ? "Recovery set" : mode === "pattern" ? "Pattern set" : "Drills"}
-          </span>
-        </div>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={endSession}
+          className="text-xs text-white/45 hover:text-white/70 transition"
+        >
+          End session now
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent-light">
+          {currentExercise.type.replace("_", " ")}
+        </span>
+        <span className="text-xs text-white/20">
+          {mode === "errors" ? "Recovery set" : mode === "pattern" ? "Pattern set" : "Drills"}
+        </span>
+      </div>
 
       <ExerciseErrorBoundary key={currentExercise._id} onSkip={handleSkip}>
         <ExerciseRenderer

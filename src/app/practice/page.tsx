@@ -15,6 +15,9 @@ import StudyProgressHeader from "../../components/StudyProgressHeader";
 import Link from "next/link";
 import { withBasePath } from "@/lib/paths";
 
+const PRACTICE_LIMIT = 25;
+const PRACTICE_SESSION_KEY = "italian-tutor:practice-session";
+
 const MODES: { key: CardMode; label: string; icon: string }[] = [
   { key: "classic", label: "Word to meaning", icon: "🇮🇹→🇬🇧" },
   { key: "reverse", label: "Meaning to word", icon: "🇬🇧→🇮🇹" },
@@ -33,6 +36,17 @@ const LEVEL_COLORS: Record<string, string> = {
 const TIER_KEY = "italian-tutor-tier-scores";
 
 type ConvexCard = Record<string, any>;
+type PracticeSessionState = {
+  selectedLevel?: string;
+  selectedTag?: string;
+  studyAll: boolean;
+  embeddedMode: boolean;
+  sessionDate?: string;
+  cards: ConvexCard[];
+  idx: number;
+  reviewed: number;
+  totalQuality: number;
+};
 
 function toVocabCard(card: ConvexCard): VocabCard {
   if (card.source === "recovery") {
@@ -72,11 +86,13 @@ export default function PracticePage() {
   const [done, setDone] = useState(false);
   const [mode, setMode] = useState<CardMode>("classic");
   const [showReviewOptions, setShowReviewOptions] = useState(false);
+  const [sessionCards, setSessionCards] = useState<ConvexCard[] | null>(null);
+  const [resumeLoaded, setResumeLoaded] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const filteredCards = useQuery(api.cards.getFiltered, {
-    limit: 50,
+    limit: PRACTICE_LIMIT,
     level: selectedLevel,
     tag: selectedTag,
     includeAll: studyAll,
@@ -103,6 +119,36 @@ export default function PracticePage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(PRACTICE_SESSION_KEY);
+      if (!raw) {
+        setResumeLoaded(true);
+        return;
+      }
+      const parsed = JSON.parse(raw) as PracticeSessionState;
+      if (
+        parsed.selectedLevel !== selectedLevel ||
+        parsed.selectedTag !== selectedTag ||
+        parsed.studyAll !== studyAll ||
+        parsed.embeddedMode !== embeddedMode ||
+        parsed.sessionDate !== sessionDate
+      ) {
+        setResumeLoaded(true);
+        return;
+      }
+      setSessionCards(parsed.cards);
+      setIdx(parsed.idx);
+      setReviewed(parsed.reviewed);
+      setTotalQuality(parsed.totalQuality);
+    } catch {
+      // ignore malformed resume state
+    } finally {
+      setResumeLoaded(true);
+    }
+  }, [embeddedMode, selectedLevel, selectedTag, sessionDate, studyAll]);
+
+  useEffect(() => {
     if (filteredCards && filteredCards.length > 0) {
       try {
         localStorage.setItem("marco-cards-snapshot", JSON.stringify(filteredCards));
@@ -119,8 +165,36 @@ export default function PracticePage() {
     }
   }, [filteredCards, isOffline]);
 
-  const cards = filteredCards ?? offlineCards ?? [];
+  const cards = sessionCards ?? filteredCards ?? offlineCards ?? [];
   const currentCard = cards[idx] as ConvexCard | undefined;
+
+  const persistPracticeSession = useCallback(
+    (next: {
+      cards: ConvexCard[];
+      idx: number;
+      reviewed: number;
+      totalQuality: number;
+    } | null) => {
+      if (typeof window === "undefined") return;
+      if (!next || next.cards.length === 0 || next.idx >= next.cards.length) {
+        localStorage.removeItem(PRACTICE_SESSION_KEY);
+        return;
+      }
+      const payload: PracticeSessionState = {
+        selectedLevel,
+        selectedTag,
+        studyAll,
+        embeddedMode,
+        sessionDate,
+        cards: next.cards,
+        idx: next.idx,
+        reviewed: next.reviewed,
+        totalQuality: next.totalQuality,
+      };
+      localStorage.setItem(PRACTICE_SESSION_KEY, JSON.stringify(payload));
+    },
+    [embeddedMode, selectedLevel, selectedTag, sessionDate, studyAll],
+  );
 
   useEffect(() => {
     if (!done || !embeddedMode || !sessionDate) return;
@@ -141,11 +215,13 @@ export default function PracticePage() {
   }, [done, embeddedMode, reviewed, sessionDate, totalQuality]);
 
   useEffect(() => {
+    setSessionCards(null);
     setIdx(0);
     setReviewed(0);
     setTotalQuality(0);
     setDone(false);
-  }, [selectedLevel, selectedTag, studyAll]);
+    persistPracticeSession(null);
+  }, [persistPracticeSession, selectedLevel, selectedTag, studyAll]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -168,17 +244,45 @@ export default function PracticePage() {
         quality,
       }).catch(() => {});
 
-      setTotalQuality((prev) => prev + quality);
-      setReviewed((prev) => prev + 1);
+      const nextReviewed = reviewed + 1;
+      const nextTotalQuality = totalQuality + quality;
+      const nextIdx = idx + 1;
+
+      setTotalQuality(nextTotalQuality);
+      setReviewed(nextReviewed);
 
       if (idx < cards.length - 1) {
-        setIdx((i) => i + 1);
+        setIdx(nextIdx);
+        setSessionCards(cards);
+        persistPracticeSession({
+          cards,
+          idx: nextIdx,
+          reviewed: nextReviewed,
+          totalQuality: nextTotalQuality,
+        });
       } else {
         setDone(true);
+        setSessionCards(null);
+        persistPracticeSession(null);
       }
     },
-    [currentCard, idx, cards.length, reviewCard],
+    [cards, currentCard, idx, persistPracticeSession, reviewCard, reviewed, totalQuality],
   );
+
+  const handleEndSession = useCallback(() => {
+    setDone(true);
+    setSessionCards(null);
+    persistPracticeSession(null);
+  }, [persistPracticeSession]);
+
+  const handleStartAnotherSession = useCallback(() => {
+    setDone(false);
+    setIdx(0);
+    setReviewed(0);
+    setTotalQuality(0);
+    setSessionCards(null);
+    persistPracticeSession(null);
+  }, [persistPracticeSession]);
 
   const hasActiveFilters = !!(selectedLevel || selectedTag);
 
@@ -303,7 +407,7 @@ export default function PracticePage() {
     </div>
   );
 
-  if (filteredCards === undefined && !isOffline && !offlineCards) {
+  if (!resumeLoaded || (filteredCards === undefined && !isOffline && !offlineCards && !sessionCards)) {
     return (
       <main className="min-h-screen flex items-center justify-center">
         <Loader2 size={32} className="text-accent animate-spin" />
@@ -371,9 +475,13 @@ export default function PracticePage() {
           <div className="w-full flex flex-col gap-3">
             <Link
               href={withBasePath("/practice")}
+              onClick={(event) => {
+                event.preventDefault();
+                handleStartAnotherSession();
+              }}
               className="w-full px-5 py-3 bg-accent rounded-xl text-sm font-medium text-center"
             >
-              Keep reviewing
+              Start another {PRACTICE_LIMIT}-card review
             </Link>
             <Link
               href={withBasePath("/drills?focus=recovery")}
@@ -431,13 +539,22 @@ export default function PracticePage() {
               total={cards.length}
               label={studyAll ? "cards" : "due"}
             />
-            <button
-              type="button"
-              onClick={() => setShowReviewOptions((value) => !value)}
-              className="shrink-0 rounded-xl border border-white/10 bg-card px-3 py-2 text-xs text-white/65 transition hover:bg-white/[0.03]"
-            >
-              {showReviewOptions ? "Hide options" : "Adjust review"}
-            </button>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowReviewOptions((value) => !value)}
+                className="rounded-xl border border-white/10 bg-card px-3 py-2 text-xs text-white/65 transition hover:bg-white/[0.03]"
+              >
+                {showReviewOptions ? "Hide options" : "Adjust review"}
+              </button>
+              <button
+                type="button"
+                onClick={handleEndSession}
+                className="text-xs text-white/45 hover:text-white/70 transition"
+              >
+                End session now
+              </button>
+            </div>
           </div>
           {showReviewOptions ? (
             <div className="space-y-4 rounded-2xl border border-white/10 bg-card/60 p-4">
@@ -464,12 +581,23 @@ export default function PracticePage() {
       )}
 
       {embeddedMode ? (
-        <StudyProgressHeader
-          title="Review words"
-          current={idx + 1}
-          total={cards.length}
-          label={studyAll ? "cards" : "due"}
-        />
+        <div className="space-y-3">
+          <StudyProgressHeader
+            title="Review words"
+            current={idx + 1}
+            total={cards.length}
+            label={studyAll ? "cards" : "due"}
+          />
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={handleEndSession}
+              className="text-xs text-white/45 hover:text-white/70 transition"
+            >
+              End session now
+            </button>
+          </div>
+        </div>
       ) : null}
 
       <div className="flex gap-2 items-center">

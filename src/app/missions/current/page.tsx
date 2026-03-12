@@ -178,12 +178,17 @@ export default function CurrentMissionPage() {
         {blockedByErrors ? (
           <div className="rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-white/70 space-y-3">
             <p>You have {progress.criticalErrorsCount} critical errors to recover before continuing the mission.</p>
-            <Link
-              href={withBasePath("/drills?focus=recovery")}
-              className="inline-flex rounded-xl border border-warn/30 bg-white/5 px-4 py-2 text-sm font-medium text-white"
-            >
-              Practice mistakes
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={withBasePath("/drills?focus=recovery")}
+                className="inline-flex rounded-xl border border-warn/30 bg-white/5 px-4 py-2 text-sm font-medium text-white"
+              >
+                Practice mistakes
+              </Link>
+              <span className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/55">
+                Recovery is recommended, but you can still choose any tier below.
+              </span>
+            </div>
           </div>
         ) : null}
 
@@ -224,8 +229,7 @@ export default function CurrentMissionPage() {
                 : mode === "silver"
                   ? inventoryStatus?.counts.standardReady ?? 0
                   : inventoryStatus?.counts.deepReady ?? 0;
-            const unavailable =
-              blockedByErrors || !modeAvailable(mode, inventoryStatus, dueCardsCount) || generating;
+            const unavailable = !modeAvailable(mode, inventoryStatus, dueCardsCount) || generating;
             const stateLabel =
               modeProgress[mode].percent >= 100
                 ? "Complete"
@@ -239,9 +243,7 @@ export default function CurrentMissionPage() {
               <Link
                 key={mode}
                 href={
-                  blockedByErrors
-                    ? withBasePath("/drills?focus=recovery")
-                    : withBasePath(`/session/${today}?mode=${mode}`)
+                  withBasePath(`/session/${today}?mode=${mode}`)
                 }
                 aria-disabled={unavailable}
                 className={`block rounded-2xl border px-4 py-4 transition ${
@@ -259,7 +261,9 @@ export default function CurrentMissionPage() {
                       <p className="text-sm font-semibold">{TIER_ACTIVITY_LABEL[mode]}</p>
                       <p className="text-[11px] text-white/45">{stateLabel}</p>
                     </div>
-                    {isRecommended ? (
+                    {blockedByErrors ? (
+                      <p className="text-[11px] text-warn">Recovery recommended before pushing mission progress</p>
+                    ) : isRecommended ? (
                       <p className="text-[11px] text-accent-light">Best next step</p>
                     ) : mode === "bronze" ? (
                       <p className="text-[11px] text-white/40">Refresh recall before harder practice</p>

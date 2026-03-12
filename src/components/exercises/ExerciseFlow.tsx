@@ -39,6 +39,7 @@ export default function ExerciseFlow({
     missionCompleted,
     submitResult,
     skip,
+    endSession,
   } = useExerciseSession({ exercises, mode, date });
 
   const contract = useMemo(() => {
@@ -210,6 +211,12 @@ export default function ExerciseFlow({
 
             <div className="w-full flex flex-col gap-3">
               <Link
+                href={withBasePath(`/session/${date}?mode=${mode}`)}
+                className="w-full px-6 py-3 bg-success rounded-xl text-sm font-medium text-center text-black"
+              >
+                Start another {mode} session
+              </Link>
+              <Link
                 href={withBasePath("/missions/current")}
                 className="w-full px-6 py-3 bg-accent rounded-xl text-sm font-medium text-center"
               >
@@ -290,6 +297,16 @@ export default function ExerciseFlow({
         <span className="text-xs text-white/40 tabular-nums">
           {current + 1}/{total}
         </span>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={endSession}
+          className="text-xs text-white/45 hover:text-white/70 transition"
+        >
+          End session now
+        </button>
       </div>
 
       <div className="flex items-center gap-2">

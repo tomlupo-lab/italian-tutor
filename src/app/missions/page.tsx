@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { Flag, Loader2, PlayCircle } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
@@ -59,6 +60,7 @@ function stateBadge(state: MissionState) {
 }
 
 export default function MissionsPage() {
+  const router = useRouter();
   const [workingMissionId, setWorkingMissionId] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState<Level>("A1");
@@ -127,10 +129,13 @@ export default function MissionsPage() {
     }
   };
 
-  const activateMission = async (missionId: string) => {
+  const activateMission = async (missionId: string, destination?: string) => {
     setWorkingMissionId(missionId);
     try {
       await setActiveMission({ missionId });
+      if (destination) {
+        router.push(destination);
+      }
     } finally {
       setWorkingMissionId(null);
     }
@@ -219,7 +224,7 @@ export default function MissionsPage() {
             {stateBadge("recommended")}
           </div>
           <button
-            onClick={() => activateMission(recommendedMission.missionId)}
+            onClick={() => activateMission(recommendedMission.missionId, withBasePath("/missions/current"))}
             disabled={workingMissionId !== null}
             className={cn(
               "inline-flex items-center gap-1 rounded-xl border px-4 py-2 text-sm font-medium transition",
@@ -228,7 +233,7 @@ export default function MissionsPage() {
             )}
           >
             <PlayCircle size={14} />
-            {workingMissionId === recommendedMission.missionId ? "Setting active..." : "Set active"}
+            {workingMissionId === recommendedMission.missionId ? "Opening..." : "Start mission"}
           </button>
         </section>
       ) : null}
@@ -321,7 +326,7 @@ export default function MissionsPage() {
                         </Link>
                       ) : (
                         <button
-                          onClick={() => activateMission(mission.missionId)}
+                          onClick={() => activateMission(mission.missionId, withBasePath("/missions/current"))}
                           disabled={workingMissionId !== null}
                           className={cn(
                             "inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
@@ -330,7 +335,7 @@ export default function MissionsPage() {
                           )}
                         >
                           <PlayCircle size={12} />
-                          {workingMissionId === mission.missionId ? "Setting active..." : "Set active"}
+                          {workingMissionId === mission.missionId ? "Opening..." : "Start"}
                         </button>
                       )}
                     </div>

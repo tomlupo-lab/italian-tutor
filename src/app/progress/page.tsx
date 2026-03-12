@@ -55,6 +55,19 @@ function skillProgressPct(skill: LearnerSkill) {
   return 0;
 }
 
+function progressLinkForMistake(category: string) {
+  if (["srs_review", "translation", "lexical_choice", "vocab", "lexical_gap"].includes(category)) {
+    return { href: withBasePath("/practice"), label: "Review words" };
+  }
+  if (["cloze", "grammar_pattern", "verb_conjugation", "verb_tense", "word_order", "preposition", "agreement"].includes(category)) {
+    return { href: withBasePath("/patterns"), label: "Train pattern lane" };
+  }
+  if (["conversation", "incomplete_response", "off_topic", "pragmatic_mismatch"].includes(category)) {
+    return { href: withBasePath("/missions/current"), label: "Practice conversation" };
+  }
+  return { href: withBasePath("/drills?focus=recovery"), label: "Practice mistakes" };
+}
+
 export default function ProgressPage() {
   const analytics = useProgressAnalytics();
   const { dateStr: todayStr } = getNowWarsaw();
@@ -257,6 +270,12 @@ export default function ProgressPage() {
                   <div className="h-2 rounded-full bg-white/5 overflow-hidden">
                     <div className="h-full rounded-full bg-warn transition-all" style={{ width: `${mistake.share}%` }} />
                   </div>
+                  <Link
+                    href={progressLinkForMistake(mistake.category).href}
+                    className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-white/75 transition hover:bg-white/[0.05]"
+                  >
+                    {progressLinkForMistake(mistake.category).label}
+                  </Link>
                 </div>
               ))}
             </div>

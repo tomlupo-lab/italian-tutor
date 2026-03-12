@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   Compass,
@@ -16,7 +16,7 @@ import { api } from "../../../convex/_generated/api";
 import { DashboardShell } from "@/components/layout/ScreenShell";
 import { cn } from "@/lib/cn";
 import { withBasePath } from "@/lib/paths";
-import type { LearnerLevel } from "@/lib/missionTypes";
+import type { LearnerStateSnapshot, Level } from "@/lib/missionTypes";
 import { PATTERN_FOCUS_CONFIG, type PatternFocusKey } from "@/lib/patternFocus";
 
 const LEVELS = ["A1", "A2", "B1", "B2"] as const;
@@ -31,13 +31,22 @@ const PATTERN_OPTIONS = [
 ] as const satisfies ReadonlyArray<{ key: PatternFocusKey; icon: unknown }>;
 
 export default function PatternsPage() {
-  const learner = useQuery(api.missions.getLearnerProgress, {}) as
-    | { level?: LearnerLevel | null }
-    | undefined;
+  const learnerState = useQuery(api.learnerState.getSnapshot, {}) as LearnerStateSnapshot | undefined;
 
-  const currentLevel = learner?.level?.currentLevel ?? "A1";
-  const [selectedLevel, setSelectedLevel] = useState<string>(currentLevel);
-  const [selectedPattern, setSelectedPattern] = useState<PatternFocusKey>("requests_and_needs");
+  const currentLevel = learnerState?.level.currentLevel ?? "A1";
+  const recommendedPattern = learnerState?.adaptiveFocus.recommendedPatterns?.[0] as PatternFocusKey | undefined;
+  const [selectedLevel, setSelectedLevel] = useState<Level>(currentLevel);
+  const [selectedPattern, setSelectedPattern] = useState<PatternFocusKey>(recommendedPattern ?? "requests_and_needs");
+
+  useEffect(() => {
+    setSelectedLevel(currentLevel);
+  }, [currentLevel]);
+
+  useEffect(() => {
+    if (recommendedPattern) {
+      setSelectedPattern(recommendedPattern);
+    }
+  }, [recommendedPattern]);
 
   const selectedPatternMeta = PATTERN_FOCUS_CONFIG[selectedPattern];
 

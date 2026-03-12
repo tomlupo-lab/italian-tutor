@@ -19,9 +19,8 @@ import {
 } from "@/lib/inventoryStatus";
 import { withBasePath } from "@/lib/paths";
 import type {
-  ActiveMissionResult,
   CatalogMission,
-  LearnerMission,
+  LearnerStateSnapshot,
 } from "@/lib/missionTypes";
 
 const TIER_ACTIVITY_LABEL: Record<ExerciseMode, string> = {
@@ -49,14 +48,12 @@ export default function CurrentMissionPage() {
 
   const dueCards = useQuery(api.cards.getDue, { limit: 999 });
   const generateExercises = useMutation(api.exerciseGenerator.generateExercises);
-  const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
+  const learnerState = useQuery(api.learnerState.getSnapshot, {}) as LearnerStateSnapshot | undefined;
+  const activeMission = learnerState?.activeMission;
   const inventoryStatus = useQuery(
     api.exercises.getMissionInventoryStatus,
     activeMission?.missionId ? { missionId: activeMission.missionId } : "skip",
   ) as InventoryStatusResult | undefined;
-  const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
-    | { missions: LearnerMission[] }
-    | undefined;
   const catalog = useQuery(api.missions.listCatalog, {}) as
     | { missions: CatalogMission[] }
     | undefined;
@@ -77,7 +74,7 @@ export default function CurrentMissionPage() {
     }
   }, [activeMission?.missionId, activeMission?.status, generateExercises, generating, inventoryStatus?.status, today]);
 
-  if (learnerProgress === undefined || catalog === undefined || (activeMission?.missionId && inventoryStatus === undefined)) {
+  if (learnerState === undefined || catalog === undefined || (activeMission?.missionId && inventoryStatus === undefined)) {
     return (
       <main className="flex min-h-screen items-center justify-center">
         <Loader2 size={32} className="animate-spin text-accent" />
@@ -85,7 +82,7 @@ export default function CurrentMissionPage() {
     );
   }
 
-  const progress = learnerProgress.missions.find((mission) => mission.active);
+  const progress = learnerState.missions.find((mission) => mission.active);
   const mission = progress
     ? catalog.missions.find((entry) => entry.missionId === progress.missionId)
     : null;

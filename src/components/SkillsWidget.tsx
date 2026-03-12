@@ -7,7 +7,7 @@ import { Target, ChevronRight } from "lucide-react";
 import { prettySkillLabel } from "@/lib/labels";
 import { computeSkillBandReadiness, describeCurrentBand, describeNextTarget, getSkillBandStatus } from "@/lib/skillBands";
 import Link from "next/link";
-import type { LearnerLevel, LearnerSkill } from "@/lib/missionTypes";
+import type { LearnerStateSnapshot } from "@/lib/missionTypes";
 import { withBasePath } from "@/lib/paths";
 
 /**
@@ -15,12 +15,10 @@ import { withBasePath } from "@/lib/paths";
  * Shows current CEFR-ready skills plus next threshold focus areas.
  */
 export default function SkillsWidget() {
-  const learner = useQuery(api.missions.getLearnerProgress, {}) as
-    | { skills?: LearnerSkill[]; level?: LearnerLevel | null }
-    | undefined;
+  const learnerState = useQuery(api.learnerState.getSnapshot, {}) as LearnerStateSnapshot | undefined;
 
   const analysis = useMemo(() => {
-    const skills = learner?.skills ?? [];
+    const skills = learnerState?.skills ?? [];
     if (skills.length === 0) return null;
 
     const levels = ["A1", "A2", "B1", "B2"].map((level) => {
@@ -55,11 +53,11 @@ export default function SkillsWidget() {
     return {
       levels,
       focus,
-      currentLevel: learner?.level?.currentLevel ?? "A1",
+      currentLevel: learnerState?.level.currentLevel ?? "A1",
     };
-  }, [learner?.level?.currentLevel, learner?.skills]);
+  }, [learnerState?.level.currentLevel, learnerState?.skills]);
 
-  if (!analysis || learner === undefined) return null;
+  if (!analysis || learnerState === undefined) return null;
 
   return (
     <Link

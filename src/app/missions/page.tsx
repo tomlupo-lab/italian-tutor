@@ -11,9 +11,8 @@ import { cn } from "@/lib/cn";
 import { withBasePath } from "@/lib/paths";
 import type {
   CatalogMission,
-  LearnerLevel,
   LearnerMission,
-  LearnerSkill,
+  LearnerStateSnapshot,
   Level,
 } from "@/lib/missionTypes";
 
@@ -65,19 +64,17 @@ export default function MissionsPage() {
   const [selectedLevel, setSelectedLevel] = useState<Level>("A1");
 
   const catalog = useQuery(api.missions.listCatalog, {}) as { missions: CatalogMission[] } | undefined;
-  const learner = useQuery(api.missions.getLearnerProgress, {}) as
-    | { missions: LearnerMission[]; level?: LearnerLevel | null; skills?: LearnerSkill[] }
-    | undefined;
+  const learnerState = useQuery(api.learnerState.getSnapshot, {}) as LearnerStateSnapshot | undefined;
   const seedCatalog = useMutation(api.missions.seedCatalog);
   const setActiveMission = useMutation(api.missions.setActiveMission);
 
   const progressByMission = useMemo(() => {
     const map = new Map<string, LearnerMission>();
-    for (const row of learner?.missions ?? []) {
+    for (const row of learnerState?.missions ?? []) {
       map.set(row.missionId, row);
     }
     return map;
-  }, [learner?.missions]);
+  }, [learnerState?.missions]);
 
   const missionsByLevel = useMemo(() => {
     const grouped: Record<Level, CatalogMission[]> = { A1: [], A2: [], B1: [], B2: [] };
@@ -90,8 +87,8 @@ export default function MissionsPage() {
     return grouped;
   }, [catalog?.missions]);
 
-  const currentLevel = (learner?.level?.currentLevel as Level | undefined) ?? "A1";
-  const activeMission = learner?.missions?.find((mission) => mission.active);
+  const currentLevel = learnerState?.level.currentLevel ?? "A1";
+  const activeMission = learnerState?.missions?.find((mission) => mission.active);
   const activeMissionCatalog = activeMission
     ? catalog?.missions?.find((mission) => mission.missionId === activeMission.missionId)
     : undefined;
@@ -139,7 +136,7 @@ export default function MissionsPage() {
     }
   };
 
-  if (catalog === undefined || learner === undefined) {
+  if (catalog === undefined || learnerState === undefined) {
     return (
       <main className="flex min-h-screen items-center justify-center">
         <Loader2 size={32} className="animate-spin text-accent" />
@@ -148,7 +145,7 @@ export default function MissionsPage() {
   }
 
   const hasCatalog = (catalog.missions?.length ?? 0) > 0;
-  const completedCount = learner.missions.filter((mission) => mission.status === "completed").length;
+  const completedCount = learnerState.missions.filter((mission) => mission.status === "completed").length;
   const visibleLevel = selectedLevel || currentLevel;
   const visibleMissions = missionsByLevel[visibleLevel];
 

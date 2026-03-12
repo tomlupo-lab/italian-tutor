@@ -19,9 +19,8 @@ import {
 import { withBasePath } from "@/lib/paths";
 import { selectSessionExercises } from "@/lib/sessionSelection";
 import type {
-  ActiveMissionResult,
   CatalogMission,
-  LearnerMission,
+  LearnerStateSnapshot,
 } from "@/lib/missionTypes";
 
 interface DueCard {
@@ -53,7 +52,8 @@ export default function SessionPage() {
   );
 
   const dueCards = useQuery(api.cards.getDue, { limit: 200 });
-  const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
+  const learnerState = useQuery(api.learnerState.getSnapshot, {}) as LearnerStateSnapshot | undefined;
+  const activeMission = learnerState?.activeMission;
   const missionExercises = useQuery(
     api.exercises.getByMission,
     activeMission?.missionId ? { missionId: activeMission.missionId } : "skip",
@@ -62,14 +62,19 @@ export default function SessionPage() {
     api.exercises.getMissionInventoryStatus,
     activeMission?.missionId ? { missionId: activeMission.missionId } : "skip",
   ) as InventoryStatusResult | undefined;
-  const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
-    | { missions: LearnerMission[] }
-    | undefined;
   const catalog = useQuery(api.missions.listCatalog, {}) as
     | { missions: CatalogMission[] }
     | undefined;
   const dueCardsCount = dueCards?.length ?? 0;
   const isQuickMode = selectedMode === "bronze";
+
+  if (learnerState === undefined || catalog === undefined) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <Loader2 size={32} className="text-accent animate-spin" />
+      </main>
+    );
+  }
 
   // Count exercises per type (for mode selector)
   const exerciseCounts = useMemo(
@@ -154,7 +159,7 @@ export default function SessionPage() {
   }, [candidateExercises, selectedMode, dueCards, dateParam, activeMissionCatalog]);
 
   const activeProgress = useMemo(() => {
-    const active = learnerProgress?.missions?.find((m) => m.active);
+    const active = learnerState?.missions?.find((m) => m.active);
     if (!active) return null;
     const mission = catalog?.missions?.find((m) => m.missionId === active.missionId);
     if (!mission) return null;
@@ -164,7 +169,7 @@ export default function SessionPage() {
       gold: `${Math.min(active.credits?.gold ?? 0, mission.exerciseTargets.goldConversations)}/${mission.exerciseTargets.goldConversations}`,
       blocker: (active.criticalErrorsCount ?? 0) > 0,
     };
-  }, [learnerProgress?.missions, catalog?.missions]);
+  }, [learnerState?.missions, catalog?.missions]);
 
   // Loading
   if (activeMission?.missionId && (missionExercises === undefined || inventoryStatus === undefined)) {

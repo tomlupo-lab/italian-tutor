@@ -13,7 +13,7 @@ import { apiPath } from "@/lib/paths";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Check, Mic, Send, Square, Volume2 } from "lucide-react";
-import type { ActiveMissionResult } from "@/lib/missionTypes";
+import type { LearnerStateSnapshot } from "@/lib/missionTypes";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -63,7 +63,8 @@ function parseLegacyMeta(rawContent: string): { content: string; meta: ChatMeta 
 
 export default function ConversationExercise({ content, onComplete }: Props) {
   const c = content as ConversationContent;
-  const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
+  const learnerState = useQuery(api.learnerState.getSnapshot, {}) as LearnerStateSnapshot | undefined;
+  const activeMission = learnerState?.activeMission;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);

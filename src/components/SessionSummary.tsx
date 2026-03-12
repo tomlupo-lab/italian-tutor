@@ -26,11 +26,8 @@ import {
   getSkillBandStatus,
 } from "@/lib/skillBands";
 import type {
-  ActiveMissionResult,
   CatalogMission,
-  LearnerLevel,
-  LearnerMission,
-  LearnerSkill,
+  LearnerStateSnapshot,
 } from "@/lib/missionTypes";
 
 interface SessionSummaryProps {
@@ -73,10 +70,8 @@ export default function SessionSummary({
   const recentSessions = useQuery(api.sessions.listRecent, { limit: 30 }) as
     | RecentSessionOutcome[]
     | undefined;
-  const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
-  const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
-    | { missions: LearnerMission[]; skills?: LearnerSkill[]; level?: LearnerLevel | null }
-    | undefined;
+  const learnerState = useQuery(api.learnerState.getSnapshot, {}) as LearnerStateSnapshot | undefined;
+  const activeMission = learnerState?.activeMission;
   const missionCatalog = useQuery(api.missions.listCatalog, {}) as
     | { missions: CatalogMission[] }
     | undefined;
@@ -191,7 +186,7 @@ export default function SessionSummary({
 
   const missionSkillSummary = useMemo(() => {
     if (!sessionSkillImpact || sessionSkillImpact.skills.length === 0) return null;
-    const skillStates = new Map((learnerProgress?.skills ?? []).map((row) => [row.skillKey, row] as const));
+    const skillStates = new Map((learnerState?.skills ?? []).map((row) => [row.skillKey, row] as const));
     const topPoints = Math.max(...sessionSkillImpact.skills.map((row) => row.points), 1);
     const topSkills = sessionSkillImpact.skills.slice(0, 4).map((row) => {
       const skillState = skillStates.get(row.skillKey);
@@ -225,20 +220,20 @@ export default function SessionSummary({
       exercisesContributing: sessionSkillImpact.exercisesContributing,
       topSkills,
     };
-  }, [learnerProgress?.skills, sessionSkillImpact]);
+  }, [learnerState?.skills, sessionSkillImpact]);
 
   // ── Session score ─────────────────────────────────────────────────
   const modeInfo = EXERCISE_TIER_META[mode] ?? { label: mode, emoji: "📝", subtitle: "" };
   const levelMissionStats = useMemo(() => {
-    const level = learnerProgress?.level?.currentLevel;
+    const level = learnerState?.level.currentLevel;
     if (!level || !missionCatalog?.missions) return null;
     const total = missionCatalog.missions.filter((m) => m.level === level).length;
     if (total === 0) return null;
-    const done = (learnerProgress?.missions ?? []).filter(
+    const done = (learnerState?.missions ?? []).filter(
       (m) => m.status === "completed" && missionCatalog.missions.some((c) => c.missionId === m.missionId && c.level === level),
     ).length;
     return { level, done, total, pct: Math.round((done / total) * 100) };
-  }, [learnerProgress?.level?.currentLevel, learnerProgress?.missions, missionCatalog?.missions]);
+  }, [learnerState?.level.currentLevel, learnerState?.missions, missionCatalog?.missions]);
 
   return (
     <div className="w-full space-y-3">
@@ -343,7 +338,7 @@ export default function SessionSummary({
               Active: <span className="text-accent-light">{activeMission.title}</span>
             </p>
           )}
-          {(learnerProgress?.missions?.find((m) => m.active)?.criticalErrorsCount ?? 0) > 0 && (
+          {(learnerState?.missions?.find((m) => m.active)?.criticalErrorsCount ?? 0) > 0 && (
             <Link
               href={withBasePath("/drills?focus=recovery")}
               className="inline-block px-3 py-1.5 rounded-lg text-xs font-medium border border-warn/30 bg-warn/20 text-warn"

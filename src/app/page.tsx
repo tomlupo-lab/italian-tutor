@@ -11,8 +11,8 @@ import { DashboardShell } from "@/components/layout/ScreenShell";
 import { type InventoryStatusResult } from "@/lib/inventoryStatus";
 import { withBasePath } from "@/lib/paths";
 import type {
-  ActiveMissionResult,
   CatalogMission,
+  LearnerStateSnapshot,
   LearnerMission,
 } from "@/lib/missionTypes";
 
@@ -22,14 +22,12 @@ export default function Home() {
   const stats = useQuery(api.sessions.getStats);
   const dueCards = useQuery(api.cards.getDue, { limit: 999 });
   const generateExercises = useMutation(api.exerciseGenerator.generateExercises);
-  const activeMission = useQuery(api.missions.getActiveMission, {}) as ActiveMissionResult | null | undefined;
+  const learnerState = useQuery(api.learnerState.getSnapshot, {}) as LearnerStateSnapshot | undefined;
+  const activeMission = learnerState?.activeMission;
   const inventoryStatus = useQuery(
     api.exercises.getMissionInventoryStatus,
     activeMission?.missionId ? { missionId: activeMission.missionId } : "skip",
   ) as InventoryStatusResult | undefined;
-  const learnerProgress = useQuery(api.missions.getLearnerProgress, {}) as
-    | { missions: LearnerMission[] }
-    | undefined;
   const catalog = useQuery(api.missions.listCatalog, {}) as
     | { missions: CatalogMission[] }
     | undefined;
@@ -59,7 +57,7 @@ export default function Home() {
 
   const hasDueCards = dueCardsCount > 0;
   const activeProgress = (() => {
-    const active = learnerProgress?.missions?.find((m) => m.active);
+    const active = learnerState?.missions?.find((m) => m.active) as LearnerMission | undefined;
     if (!active) return null;
     const mission = catalog?.missions?.find((m) => m.missionId === active.missionId);
     if (!mission) return { active, mission: null, blocker: false };
